@@ -70,7 +70,7 @@ router.get("/{*folderpath}", async (req, res) => {
 });
 
 // handling the posted files from the client
-router.post("/upload/*folderpath", async (req, res) => {
+router.post("/upload/{*folderpath}", async (req, res) => {
   try {
     let rawPath = req.params.folderpath;
     const relativePath = Array.isArray(rawPath)
