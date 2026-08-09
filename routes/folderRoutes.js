@@ -2,6 +2,7 @@ import express from "express";
 import { mkdir, rename } from "fs/promises";
 import path, { join } from "path";
 import { isPathSafe, STORAGE_PATH } from "../utils/paths.js";
+import filesData from "../filesDB.json" with { type: "json" };
 
 const router = express.Router();
 
@@ -43,9 +44,14 @@ router.patch("/edit/{*folderpath}", async (req, res) => {
     const relativePath = Array.isArray(rawPath)
       ? rawPath.join("/")
       : rawPath || "";
+    const fileData = filesData.find((file) => file.id === relativePath);
+
     const decodedPath = decodeURIComponent(relativePath);
 
-    const oldFullPath = path.join(STORAGE_PATH, decodedPath);
+    const oldFullPath = path.join(
+      STORAGE_PATH,
+      decodedPath + (fileData?.fileExtension || ""),
+    );
 
     const dir = path.dirname(oldFullPath);
     const newFileName = req.body.newFileName;
