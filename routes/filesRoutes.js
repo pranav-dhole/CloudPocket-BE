@@ -3,32 +3,35 @@ import { createWriteStream } from "fs";
 import { mkdir, readdir, rename, rm, stat, writeFile } from "fs/promises";
 import { pipeline } from "stream/promises";
 import path, { join } from "path";
-import { isPathSafe, resolveSafePath } from "../utils/paths.js";
+import { isPathSafe, resolveSafePath, STORAGE_PATH } from "../utils/paths.js";
 import filesData from "../filesDB.json" with { type: "json" };
+import foldersData from "../foldersDB.json" with { type: "json" };
 import { extension } from "mime-types";
 import crypto from "crypto";
 
 const router = express.Router();
 
 // file deleting logic
-router.delete("/delete/{*filepath}", async (req, res) => {
+router.delete("/delete/:fileId", async (req, res) => {
   try {
-    const rawPath = req.params.filepath;
-    const relativePath = Array.isArray(rawPath) ? rawPath.join("/") : rawPath;
+    const { fileId } = req.params;
+    const fileIdx = filesData.findIndex((file) => file.id === fileId);
+    const fileData = filesData[fileIdx];
+    const filePath = path.join(STORAGE_PATH, fileId + fileData.fileExtension);
 
-    const decodedPath = decodeURIComponent(relativePath || "");
-    if (!decodedPath) {
-      return res.status(400).json({ msg: "No file path provided" });
-    }
+    filesData.splice(fileIdx, 1);
+    const parentFolderData = foldersData.find(
+      (folder) => folder.id === fileData.parentFolderId,
+    );
+    parentFolderData.files = parentFolderData.files.filter(
+      (folderFileId) => folderFileId !== fileId,
+    );
+    await writeFile("./filesDB.json", JSON.stringify(filesData));
+    await writeFile("./foldersDB.json", JSON.stringify(foldersData));
 
-    const targetPath = resolveSafePath(decodedPath);
-
-    if (!isPathSafe(targetPath)) {
-      return res.status(403).json({ msg: "Access denied" });
-    }
-
-    const fileData = filesData.find((file) => file.id === relativePath);
-    await rm(targetPath + (fileData?.fileExtension || ""), { recursive: true });
+    await rm(filePath, {
+      recursive: true,
+    });
     res.status(200).json({ msg: "file deleted successfully" });
   } catch (err) {
     console.error(err);
@@ -36,39 +39,21 @@ router.delete("/delete/{*filepath}", async (req, res) => {
   }
 });
 
-const getFiles = async (req, res) => {
+// getting files from path
+router.get("/{:fileId}", async (req, res) => {
   try {
-    const rawpath = req.params.fileId;
+    const { fileId } = req.params;
+    if (!fileId) {
+      const folderData = foldersData[0];
+      const files = folderData.files.map((file) =>
+        filesData.find((file) => file.id === file.id),
+      );
 
-    const fileData = filesData.find((file) => file.id === rawpath);
-
-    const relativePath = Array.isArray(rawpath)
-      ? rawpath.join("/")
-      : rawpath || "";
-    const decodedPath = decodeURIComponent(relativePath);
-    const targetDir = resolveSafePath(
-      decodedPath + (fileData?.fileExtension || ""),
-    );
-
-    if (!isPathSafe(targetDir)) {
-      return res.status(403).json({ msg: "Access Denied" });
+      res.json({ ...folderData, files });
+    } else {
+      const folderData = foldersData.find((folder) => folder.id === fileId);
+      res.json(folderData);
     }
-
-    const stats = await stat(targetDir);
-
-    // if its an folder send its content list
-    if (stats.isDirectory()) {
-      const dirents = await readdir(targetDir, { withFileTypes: true });
-      const itemsList = dirents.map((d) => ({
-        name: d.name,
-        isDirectory: d.isDirectory(),
-      }));
-
-      return res.json(itemsList);
-    }
-
-    // if its an file send using .sendFile
-    return res.sendFile(targetDir);
   } catch (err) {
     console.error(err);
     if (err.code === "ENOENT") {
@@ -76,10 +61,7 @@ const getFiles = async (req, res) => {
     }
     res.status(500).json({ msg: "Error reading directory" });
   }
-};
-// getting files from path
-router.get("/:fileId", getFiles);
-router.get("/", getFiles);
+});
 
 // handling the posted files from the client
 router.post("/upload/{*folderpath}", async (req, res) => {
@@ -112,14 +94,22 @@ router.post("/upload/{*folderpath}", async (req, res) => {
     const writeStream = createWriteStream(filePath);
     await pipeline(req, writeStream);
 
+    const parentFolderId = req.headers.parentfolderid || foldersData[0].id;
     const newRecord = {
       id,
       fileExtension,
       fileName,
+      parentFolderId,
     };
 
     filesData.push(newRecord);
     await writeFile("./filesDB.json", JSON.stringify(filesData));
+
+    const fileParentFolder = foldersData.find(
+      (folder) => folder.id === parentFolderId,
+    );
+    fileParentFolder.files.push(newRecord);
+    await writeFile("./foldersDB.json", JSON.stringify(foldersData));
     res
       .status(200)
       .json({ msg: "file created successfully", record: newRecord });
