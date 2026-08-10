@@ -1,5 +1,5 @@
 import express from "express";
-import { mkdir, rename } from "fs/promises";
+import { mkdir, rename, writeFile } from "fs/promises";
 import path, { join } from "path";
 import { isPathSafe, STORAGE_PATH } from "../utils/paths.js";
 import filesData from "../filesDB.json" with { type: "json" };
@@ -38,33 +38,21 @@ router.post("/create/*foldername", async (req, res) => {
 });
 
 // handling file rename stuff
-router.patch("/edit/{*folderpath}", async (req, res) => {
+router.patch("/edit/:fileId", async (req, res) => {
   try {
-    const rawPath = req.params.folderpath;
+    const rawPath = req.params.fileId;
     const relativePath = Array.isArray(rawPath)
       ? rawPath.join("/")
       : rawPath || "";
     const fileData = filesData.find((file) => file.id === relativePath);
 
-    const decodedPath = decodeURIComponent(relativePath);
-
-    const oldFullPath = path.join(
-      STORAGE_PATH,
-      decodedPath + (fileData?.fileExtension || ""),
-    );
-
-    const dir = path.dirname(oldFullPath);
     const newFileName = req.body.newFileName;
     if (newFileName === "/" || newFileName === `\\` || newFileName === "..") {
       return res.status(403).json({ msg: "Filename denied" });
     }
-    const newFullPath = path.join(dir, newFileName);
 
-    if (!isPathSafe(oldFullPath) || !isPathSafe(newFullPath)) {
-      return res.status(403).json({ msg: "Access denied" });
-    }
-
-    await rename(oldFullPath, newFullPath);
+    fileData.fileName = newFileName;
+    await writeFile("./filesDB.json", JSON.stringify(filesData));
     res.status(200).json({ msg: "file renamed successfully" });
   } catch (err) {
     console.error(err);
