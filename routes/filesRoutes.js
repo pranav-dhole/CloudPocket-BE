@@ -24,10 +24,13 @@ router.delete("/delete/:fileId", async (req, res) => {
       (folder) => folder.id === fileData.parentFolderId,
     );
     parentFolderData.files = parentFolderData.files.filter(
-      (folderFileId) => folderFileId !== fileId,
+      (folderFile) => folderFile.id !== fileId,
     );
-    await writeFile("./filesDB.json", JSON.stringify(filesData));
-    await writeFile("./foldersDB.json", JSON.stringify(foldersData));
+
+    await Promise.all([
+      writeFile("./filesDB.json", JSON.stringify(filesData, null, 2)),
+      writeFile("./foldersDB.json", JSON.stringify(foldersData, null, 2)),
+    ]);
 
     await rm(filePath, {
       recursive: true,
@@ -40,56 +43,45 @@ router.delete("/delete/:fileId", async (req, res) => {
 });
 
 // getting files from path
-router.get("/{:fileId}", async (req, res) => {
-  try {
-    const { fileId } = req.params;
-    if (!fileId) {
-      const folderData = foldersData[0];
-      const files = folderData.files.map((file) =>
-        filesData.find((file) => file.id === file.id),
-      );
 
-      res.json({ ...folderData, files });
-    } else {
-      const folderData = foldersData.find((folder) => folder.id === fileId);
-      res.json(folderData);
-    }
-  } catch (err) {
-    console.error(err);
-    if (err.code === "ENOENT") {
-      return res.status(404).json({ msg: "Directory not found" });
-    }
-    res.status(500).json({ msg: "Error reading directory" });
+router.get("/:id", (req, res) => {
+  const { id } = req.params;
+  const fileData = filesData.find((file) => file.id === id);
+  if (!fileData) {
+    return res.status(404).json({ error: "File record not found!" });
   }
+
+  const filePath = `${STORAGE_PATH}/${id}${fileData.fileExtension}`;
+  if (req.query.action === "download") {
+    res.set("Content-Disposition", `attachment; filename=${fileData.fileName}`);
+  }
+  res.sendFile(filePath, (err) => {
+    if (err) {
+      if (!res.headersSent) {
+        res.status(404).json({ error: "File not found on disk!" });
+      }
+    }
+  });
 });
 
 // handling the posted files from the client
-router.post("/upload/{*folderpath}", async (req, res) => {
+router.post("/upload/:fileName", async (req, res) => {
   try {
-    let rawPath = req.params.folderpath;
-    const relativePath = Array.isArray(rawPath)
-      ? rawPath.join("/")
-      : rawPath || "/";
+    const rawFileName = req.params.fileName;
 
-    const fileName = req.headers.filename;
-    if (fileName === "/" || fileName === `\\` || fileName === "..") {
+    if (rawFileName === "/" || rawFileName === `\\` || rawFileName === "..") {
       return res.status(403).json({ msg: "Filename denied" });
     }
 
+    const decodedFileName = decodeURIComponent(rawFileName);
     const id = crypto.randomUUID();
-    const fileExtension = path.extname(fileName);
+    const fileExtension = path.extname(decodedFileName);
     const fullFileName = id + fileExtension;
-    const decodedPath = decodeURIComponent(
-      path.join(relativePath, fullFileName),
-    );
 
-    const filePath = resolveSafePath(decodedPath);
+    const filePath = resolveSafePath(fullFileName);
     if (!isPathSafe(filePath)) {
       return res.status(403).json({ msg: "Access denied" });
     }
-
-    const targetDir = path.dirname(filePath);
-    await mkdir(targetDir, { recursive: true });
 
     const writeStream = createWriteStream(filePath);
     await pipeline(req, writeStream);
@@ -98,18 +90,21 @@ router.post("/upload/{*folderpath}", async (req, res) => {
     const newRecord = {
       id,
       fileExtension,
-      fileName,
+      fileName: decodedFileName,
       parentFolderId,
     };
 
     filesData.push(newRecord);
-    await writeFile("./filesDB.json", JSON.stringify(filesData));
 
     const fileParentFolder = foldersData.find(
       (folder) => folder.id === parentFolderId,
     );
     fileParentFolder.files.push(newRecord);
-    await writeFile("./foldersDB.json", JSON.stringify(foldersData));
+
+    await Promise.all([
+      writeFile("./filesDB.json", JSON.stringify(filesData, null, 2)),
+      writeFile("./foldersDB.json", JSON.stringify(foldersData, null, 2)),
+    ]);
     res
       .status(200)
       .json({ msg: "file created successfully", record: newRecord });
