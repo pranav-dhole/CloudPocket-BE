@@ -8,30 +8,33 @@ import foldersData from "../foldersDB.json" with { type: "json" };
 const router = express.Router();
 
 // handling new folder creation logic
-router.post("/create/*foldername", async (req, res) => {
+router.post("/create/{:parentFolderId}", async (req, res) => {
   try {
-    const rawPath = req.params.foldername;
+    const parentFolderId = req.params.parentFolderId || foldersData[0].id;
+    const folderName = req.headers.foldername;
 
-    if (!rawPath) {
-      return res
-        .status(400)
-        .json({ msg: "Folder name/path parameter is missing" });
+    if (!folderName) {
+      return res.status(400).json({ msg: "Folder name parameter is missing" });
     }
 
-    const relativePath = Array.isArray(rawPath) ? rawPath.join("/") : rawPath;
+    const id = crypto.randomUUID();
+    const parentFolder = foldersData.find(
+      (folder) => folder.id === parentFolderId,
+    );
 
-    const basePath = req.headers["filecreatepath"];
-    const decodedPath = decodeURIComponent(relativePath);
-    const folderPath = path.join(basePath, decodedPath);
-    const finalFullPath = path.join(STORAGE_PATH, folderPath);
-    if (!isPathSafe(finalFullPath)) {
-      return res.status(403).json({ msg: "Access denied" });
-    }
+    const newFolderData = {
+      id,
+      name: folderName,
+      parentFolderId: parentFolderId,
+      files: [],
+      folders: [],
+    };
 
-    await mkdir(finalFullPath, { recursive: true });
-    res
-      .status(200)
-      .json({ msg: "Folder created successfully", path: finalFullPath });
+    parentFolder.folders.push(id);
+    foldersData.push(newFolderData);
+    await writeFile("./foldersDB.json", JSON.stringify(foldersData, null, 2));
+
+    res.status(200).json({ msg: "Folder created successfully", newFolderData });
   } catch (err) {
     console.error(err);
     res.status(404).json({ msg: "Error while creating an folder", err: err });
@@ -48,11 +51,11 @@ router.patch("/edit/:fileId", async (req, res) => {
     const fileData = filesData.find((file) => file.id === relativePath);
 
     const newFileName = req.body.newFileName;
-    if (newFileName === fileData.fileName) {
+    if (newFileName === fileData.name) {
       return res.status(403).json({ msg: "Filename denied" });
     }
 
-    fileData.fileName = newFileName;
+    fileData.name = newFileName;
 
     const parentFolderData = foldersData.find(
       (folder) => folder.id === fileData.parentFolderId,
@@ -60,7 +63,7 @@ router.patch("/edit/:fileId", async (req, res) => {
     const folderFileData = parentFolderData.files.find(
       (file) => file.id === relativePath,
     );
-    folderFileData.fileName = newFileName;
+    folderFileData.name = newFileName;
 
     await Promise.all([
       writeFile("./filesDB.json", JSON.stringify(filesData, null, 2)),
@@ -76,21 +79,21 @@ router.patch("/edit/:fileId", async (req, res) => {
   }
 });
 
-router.get("/:fileId", async (req, res) => {
+router.get("/{:fileId}", async (req, res) => {
   try {
     const { fileId } = req.params;
+    const folderData = fileId
+      ? foldersData.find((folder) => folder.id === fileId)
+      : foldersData[0];
+    const files = folderData.files.map((folderFile) =>
+      filesData.find((file) => file.id === folderFile.id),
+    );
 
-    if (!fileId) {
-      const folderData = foldersData[0];
-      const files = folderData.files.map((folderFile) =>
-        filesData.find((file) => file.id === folderFile.id),
-      );
+    const folders = folderData.folders
+      .map((folderId) => foldersData.find((folder) => folder.id === folderId))
+      .map(({ id, name }) => ({ id, name }));
 
-      res.json({ ...folderData, files });
-    } else {
-      const folderData = foldersData.find((folder) => folder.id === fileId);
-      res.json(folderData);
-    }
+    res.json({ ...folderData, files, folders });
   } catch (err) {
     console.error(err);
     if (err.code === "ENOENT") {
