@@ -43,7 +43,6 @@ router.delete("/delete/:fileId", async (req, res) => {
 });
 
 // getting files from path
-
 router.get("/:id", (req, res) => {
   const { id } = req.params;
   const fileData = filesData.find((file) => file.id === id);
@@ -65,15 +64,13 @@ router.get("/:id", (req, res) => {
 });
 
 // handling the posted files from the client
-router.post("/upload/:fileName", async (req, res) => {
+router.post("/upload/{:parentFolderId}", async (req, res) => {
   try {
-    const rawFileName = req.params.fileName;
+    const parentFolderId = req.params.parentFolderId || foldersData[0].id;
+    const fileName = req.headers.filename;
+    console.log({ fileName, parentFolderId });
 
-    if (rawFileName === "/" || rawFileName === `\\` || rawFileName === "..") {
-      return res.status(403).json({ msg: "Filename denied" });
-    }
-
-    const decodedFileName = decodeURIComponent(rawFileName);
+    const decodedFileName = decodeURIComponent(fileName);
     const id = crypto.randomUUID();
     const fileExtension = path.extname(decodedFileName);
     const fullFileName = id + fileExtension;
@@ -86,7 +83,6 @@ router.post("/upload/:fileName", async (req, res) => {
     const writeStream = createWriteStream(filePath);
     await pipeline(req, writeStream);
 
-    const parentFolderId = req.headers.parentfolderid || foldersData[0].id;
     const newRecord = {
       id,
       fileExtension,
@@ -114,6 +110,30 @@ router.post("/upload/:fileName", async (req, res) => {
       return res.status(404).json({ msg: "Directory not found" });
     }
     res.status(500).json({ msg: "Error writing directory" });
+  }
+});
+
+// handling file rename stuff
+router.patch("/edit/:fileId", async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const fileData = filesData.find((file) => file.id === fileId);
+
+    const newFileName = req.body.newFileName;
+    if (newFileName === fileData.fileName) {
+      return res.status(403).json({ msg: "Filename denied" });
+    }
+
+    fileData.fileName = newFileName;
+
+    (await writeFile("./filesDB.json", JSON.stringify(filesData, null, 2)),
+      res.status(200).json({ msg: "file renamed successfully" }));
+  } catch (err) {
+    console.error(err);
+    if (err.code === "ENOENT") {
+      return res.status(404).json({ msg: "File not found" });
+    }
+    res.status(500).json({ msg: "Error renaming file" });
   }
 });
 
