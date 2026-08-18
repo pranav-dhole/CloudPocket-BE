@@ -24,7 +24,7 @@ router.post("/create/{:parentFolderId}", async (req, res) => {
 
     const newFolderData = {
       id,
-      name: folderName,
+      folderName,
       parentFolderId: parentFolderId,
       files: [],
       folders: [],
@@ -42,34 +42,20 @@ router.post("/create/{:parentFolderId}", async (req, res) => {
 });
 
 // handling file rename stuff
-router.patch("/edit/:fileId", async (req, res) => {
+router.patch("/edit/:folderId", async (req, res) => {
   try {
-    const rawPath = req.params.fileId;
-    const relativePath = Array.isArray(rawPath)
-      ? rawPath.join("/")
-      : rawPath || "";
-    const fileData = filesData.find((file) => file.id === relativePath);
+    const folderId = req.params.folderId;
+    const folderData = foldersData.find((folder) => folder.id === folderId);
 
-    const newFileName = req.body.newFileName;
-    if (newFileName === fileData.name) {
-      return res.status(403).json({ msg: "Filename denied" });
+    const newFolderName = req.body.newFolderName;
+    if (newFolderName === folderData.folderName) {
+      return res.status(403).json({ msg: "Folder name denied" });
     }
 
-    fileData.name = newFileName;
+    folderData.folderName = newFolderName;
 
-    const parentFolderData = foldersData.find(
-      (folder) => folder.id === fileData.parentFolderId,
-    );
-    const folderFileData = parentFolderData.files.find(
-      (file) => file.id === relativePath,
-    );
-    folderFileData.name = newFileName;
-
-    await Promise.all([
-      writeFile("./filesDB.json", JSON.stringify(filesData, null, 2)),
-      writeFile("./foldersDB.json", JSON.stringify(foldersData, null, 2)),
-    ]);
-    res.status(200).json({ msg: "file renamed successfully" });
+    await writeFile("./foldersDB.json", JSON.stringify(foldersData, null, 2));
+    res.status(200).json({ msg: "folder renamed successfully" });
   } catch (err) {
     console.error(err);
     if (err.code === "ENOENT") {
@@ -79,11 +65,11 @@ router.patch("/edit/:fileId", async (req, res) => {
   }
 });
 
-router.get("/{:fileId}", async (req, res) => {
+router.get("/{:folderId}", async (req, res) => {
   try {
-    const { fileId } = req.params;
-    const folderData = fileId
-      ? foldersData.find((folder) => folder.id === fileId)
+    const { folderId } = req.params;
+    const folderData = folderId
+      ? foldersData.find((folder) => folder.id === folderId)
       : foldersData[0];
     const files = folderData.files.map((folderFile) =>
       filesData.find((file) => file.id === folderFile.id),
@@ -91,7 +77,7 @@ router.get("/{:fileId}", async (req, res) => {
 
     const folders = folderData.folders
       .map((folderId) => foldersData.find((folder) => folder.id === folderId))
-      .map(({ id, name }) => ({ id, name }));
+      .map(({ id, folderName }) => ({ id, folderName }));
 
     res.json({ ...folderData, files, folders });
   } catch (err) {
