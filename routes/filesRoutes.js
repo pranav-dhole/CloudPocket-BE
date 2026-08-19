@@ -118,6 +118,12 @@ router.patch("/edit/:fileId", async (req, res) => {
   try {
     const { fileId } = req.params;
     const fileData = filesData.find((file) => file.id === fileId);
+    const parentFolderData = foldersData.find(
+      (folder) => folder.id === fileData.parentFolderId,
+    );
+    const folderData = parentFolderData.files.find(
+      (file) => file.id === fileId,
+    );
 
     const newFileName = req.body.newFileName;
     if (newFileName === fileData.fileName) {
@@ -125,9 +131,14 @@ router.patch("/edit/:fileId", async (req, res) => {
     }
 
     fileData.fileName = newFileName;
+    folderData.fileName = newFileName;
 
-    (await writeFile("./filesDB.json", JSON.stringify(filesData, null, 2)),
-      res.status(200).json({ msg: "file renamed successfully" }));
+    await Promise.all([
+      writeFile("./filesDB.json", JSON.stringify(filesData, null, 2)),
+      writeFile("./foldersDB.json", JSON.stringify(foldersData, null, 2)),
+    ]);
+
+    res.status(200).json({ msg: "file renamed successfully" });
   } catch (err) {
     console.error(err);
     if (err.code === "ENOENT") {
