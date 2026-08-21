@@ -3,7 +3,7 @@ import { createWriteStream } from "fs";
 import { mkdir, readdir, rename, rm, stat, writeFile } from "fs/promises";
 import { pipeline } from "stream/promises";
 import path, { join } from "path";
-import { isPathSafe, resolveSafePath, STORAGE_PATH } from "../utils/paths.js";
+import { STORAGE_PATH } from "../utils/paths.js";
 import filesData from "../filesDB.json" with { type: "json" };
 import foldersData from "../foldersDB.json" with { type: "json" };
 import { extension } from "mime-types";
@@ -16,6 +16,8 @@ router.delete("/delete/:fileId", async (req, res) => {
   try {
     const { fileId } = req.params;
     const fileIdx = filesData.findIndex((file) => file.id === fileId);
+    if (!fileIdx || fileIdx === -1)
+      return res.status(404).json({ message: "File doesnt exist" });
     const fileData = filesData[fileIdx];
     const filePath = path.join(STORAGE_PATH, fileId + fileData.fileExtension);
 
@@ -23,6 +25,9 @@ router.delete("/delete/:fileId", async (req, res) => {
     const parentFolderData = foldersData.find(
       (folder) => folder.id === fileData.parentFolderId,
     );
+
+    if (!parentFolderData)
+      return res.status(404).json({ message: "Parent folder doesnt exist" });
     parentFolderData.files = parentFolderData.files.filter(
       (folderFile) => folderFile.id !== fileId,
     );
@@ -35,10 +40,10 @@ router.delete("/delete/:fileId", async (req, res) => {
     await rm(filePath, {
       recursive: true,
     });
-    res.status(200).json({ msg: "file deleted successfully" });
+    return res.status(200).json({ message: "File deleted successfully" });
   } catch (err) {
     console.error(err);
-    res.status(404).json({ msg: "Error while deleting the file" });
+    return res.status(500).json({ message: "Error while deleting the file" });
   }
 });
 
@@ -47,7 +52,7 @@ router.get("/:id", (req, res) => {
   const { id } = req.params;
   const fileData = filesData.find((file) => file.id === id);
   if (!fileData) {
-    return res.status(404).json({ error: "File record not found!" });
+    return res.status(404).json({ message: "File not found!" });
   }
 
   const filePath = `${STORAGE_PATH}/${id}${fileData.fileExtension}`;
@@ -57,7 +62,7 @@ router.get("/:id", (req, res) => {
   res.sendFile(filePath, (err) => {
     if (err) {
       if (!res.headersSent) {
-        res.status(404).json({ error: "File not found on disk!" });
+        return res.status(500).json({ message: "File not found on disk!" });
       }
     }
   });
@@ -68,19 +73,16 @@ router.post("/upload/{:parentFolderId}", async (req, res) => {
   try {
     const parentFolderId = req.params.parentFolderId || foldersData[0].id;
     const fileName = req.headers.filename;
-    console.log({ fileName, parentFolderId });
+    if (!fileName)
+      return res.status(400).json({ message: "Filename is required" });
 
     const decodedFileName = decodeURIComponent(fileName);
     const id = crypto.randomUUID();
-    const fileExtension = path.extname(decodedFileName);
+    const sanitizedBaseName = path.basename(decodedFileName);
+    const fileExtension = path.extname(sanitizedBaseName);
     const fullFileName = id + fileExtension;
 
-    const filePath = resolveSafePath(fullFileName);
-    if (!isPathSafe(filePath)) {
-      return res.status(403).json({ msg: "Access denied" });
-    }
-
-    const writeStream = createWriteStream(filePath);
+    const writeStream = createWriteStream(fullFileName);
     await pipeline(req, writeStream);
 
     const newRecord = {
@@ -95,21 +97,21 @@ router.post("/upload/{:parentFolderId}", async (req, res) => {
     const fileParentFolder = foldersData.find(
       (folder) => folder.id === parentFolderId,
     );
+
+    if (!fileParentFolder)
+      return res.status(404).json({ message: "Parent folder doesnt exist" });
     fileParentFolder.files.push(newRecord);
 
     await Promise.all([
       writeFile("./filesDB.json", JSON.stringify(filesData, null, 2)),
       writeFile("./foldersDB.json", JSON.stringify(foldersData, null, 2)),
     ]);
-    res
-      .status(200)
-      .json({ msg: "file created successfully", record: newRecord });
+    return res.status(201).json({ message: "File created successfully" });
   } catch (err) {
     console.error(err);
-    if (err.code === "ENOENT") {
-      return res.status(404).json({ msg: "Directory not found" });
-    }
-    res.status(500).json({ msg: "Error writing directory" });
+    return res
+      .status(500)
+      .json({ message: "Error occured while uploading file" });
   }
 });
 
@@ -118,16 +120,28 @@ router.patch("/edit/:fileId", async (req, res) => {
   try {
     const { fileId } = req.params;
     const fileData = filesData.find((file) => file.id === fileId);
+    if (!fileData || fileData === -1)
+      return res.status(404).json({ message: "File doesnt exist" });
+
     const parentFolderData = foldersData.find(
       (folder) => folder.id === fileData.parentFolderId,
     );
+    if (!parentFolderData || parentFolderData === -1)
+      return res.status(404).json({ message: "Parent folder doesnt exist" });
+
     const folderData = parentFolderData.files.find(
       (file) => file.id === fileId,
     );
+    if (!folderData || folderData === -1)
+      return res
+        .status(404)
+        .json({ message: "File doesnt exist in parent folder" });
 
     const newFileName = req.body.newFileName;
     if (newFileName === fileData.fileName) {
-      return res.status(403).json({ msg: "Filename denied" });
+      return res.status(403).json({ message: "Filename denied" });
+    } else if (!newFileName) {
+      return res.status(400).json({ message: "File name is required" });
     }
 
     fileData.fileName = newFileName;
@@ -138,13 +152,12 @@ router.patch("/edit/:fileId", async (req, res) => {
       writeFile("./foldersDB.json", JSON.stringify(foldersData, null, 2)),
     ]);
 
-    res.status(200).json({ msg: "file renamed successfully" });
+    return res.status(200).json({ message: "File renamed successfully" });
   } catch (err) {
     console.error(err);
-    if (err.code === "ENOENT") {
-      return res.status(404).json({ msg: "File not found" });
-    }
-    res.status(500).json({ msg: "Error renaming file" });
+    return res
+      .status(500)
+      .json({ message: "Error occured while renaming file" });
   }
 });
 
