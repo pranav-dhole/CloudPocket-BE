@@ -16,7 +16,8 @@ router.delete("/delete/:fileId", async (req, res) => {
   try {
     const { fileId } = req.params;
     const fileIdx = filesData.findIndex((file) => file.id === fileId);
-    if (!fileIdx || fileIdx === -1)
+
+    if (fileIdx < 0 || fileIdx === undefined || fileIdx === null)
       return res.status(404).json({ message: "File doesnt exist" });
     const fileData = filesData[fileIdx];
     const filePath = path.join(STORAGE_PATH, fileId + fileData.fileExtension);
@@ -82,7 +83,9 @@ router.post("/upload/{:parentFolderId}", async (req, res) => {
     const fileExtension = path.extname(sanitizedBaseName);
     const fullFileName = id + fileExtension;
 
-    const writeStream = createWriteStream(fullFileName);
+    const writeStream = createWriteStream(
+      path.join(STORAGE_PATH, fullFileName),
+    );
     await pipeline(req, writeStream);
 
     const newRecord = {
@@ -100,7 +103,7 @@ router.post("/upload/{:parentFolderId}", async (req, res) => {
 
     if (!fileParentFolder)
       return res.status(404).json({ message: "Parent folder doesnt exist" });
-    fileParentFolder.files.push(newRecord);
+    fileParentFolder.files.push(id);
 
     await Promise.all([
       writeFile("./filesDB.json", JSON.stringify(filesData, null, 2)),

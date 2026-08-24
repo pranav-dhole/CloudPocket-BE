@@ -81,8 +81,8 @@ router.get("/{:folderId}", async (req, res) => {
     if (!folderData || folderData === -1)
       return res.status(404).json({ message: "Folder doesnt exist" });
 
-    const resolvedFiles = folderData.files?.map((ff) =>
-      filesData.find((file) => file.id === ff.id),
+    const resolvedFiles = folderData.files?.map((id) =>
+      filesData.find((file) => file.id === id),
     );
 
     const resolvedFolders = folderData.folders.map((id) =>
@@ -99,10 +99,14 @@ router.get("/{:folderId}", async (req, res) => {
         .status(404)
         .json({ message: "One or more files OR folders dont exist" });
 
-    const files = resolvedFiles;
-    const folders = resolvedFolders.map(({ id, folderName }) => {
-      (id, folderName);
-    });
+    const files = resolvedFiles.map(({ id, fileName }) => ({
+      id,
+      fileName,
+    }));
+    const folders = resolvedFolders.map(({ id, folderName }) => ({
+      id,
+      folderName,
+    }));
 
     return res.status(200).json({ ...folderData, files, folders });
   } catch (err) {

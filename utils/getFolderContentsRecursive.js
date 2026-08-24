@@ -5,7 +5,7 @@ export function getFolderContentsRecursive(targetFolderId, allFolders) {
   }
 
   let folderIds = [targetFolderId];
-  let fileIds = (folder.files || []).map((file) => file.id);
+  let fileIds = (folder.files || []).map((id) => id);
 
   for (const childFolderId of folder.folders || []) {
     const contents = getFolderContentsRecursive(childFolderId, allFolders);
