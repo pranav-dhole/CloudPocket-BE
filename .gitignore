@@ -2,3 +2,4 @@ node_modules
 storage
 filesDB.json
 foldersDB.json
+usersDB.json
