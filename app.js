@@ -5,6 +5,7 @@ import { pipeline } from "stream/promises";
 import path, { join } from "path";
 import filesRoutes from "./routes/filesRoutes.js";
 import folderRoutes from "./routes/folderRoutes.js";
+import usersRoutes from "./routes/usersRoutes.js";
 import { STORAGE_PATH } from "./utils/paths.js";
 
 const app = express();
@@ -27,6 +28,7 @@ app.use((req, res, next) => {
 app.use(express.static(STORAGE_PATH));
 app.use("/files", filesRoutes);
 app.use("/folder", folderRoutes);
+app.use("/users", usersRoutes);
 
 app.listen(PORT, () => {
   console.log(`listening on port ${PORT}`);
