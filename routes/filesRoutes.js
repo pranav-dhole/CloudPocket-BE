@@ -30,7 +30,7 @@ router.delete("/delete/:fileId", async (req, res) => {
     if (!parentFolderData)
       return res.status(404).json({ message: "Parent folder doesnt exist" });
     parentFolderData.files = parentFolderData.files.filter(
-      (folderFile) => folderFile.id !== fileId,
+      (id) => id !== fileId,
     );
 
     await Promise.all([
