@@ -8,7 +8,7 @@ import crypto from "crypto";
 
 const router = express.Router();
 
-router.post("/", async (req, res) => {
+router.post("/register", async (req, res) => {
   const { name, email, password } = req.body;
   const isEmailPresent = usersData.find((user) => user.email === email);
 
@@ -44,6 +44,24 @@ router.post("/", async (req, res) => {
     writeFile("./foldersDB.json", JSON.stringify(foldersData, null, 2)),
   ]);
   return res.status(201).json({ message: "Account registered successfully" });
+});
+
+router.post("/login", (req, res) => {
+  const { email, password } = req.body;
+  const user = usersData.find((user) => user.email === email);
+  const uid = user.id;
+
+  if (!user || user.password !== password) {
+    return res.status(401).json({ message: "Invalid Credentials" });
+  }
+
+  res.cookie("uid", uid, {
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: 60 * 1000 * 60,
+  });
+
+  return res.status(201).json({ message: "Logged in successfully" });
 });
 
 export default router;
