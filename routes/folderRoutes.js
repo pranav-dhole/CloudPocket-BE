@@ -11,7 +11,7 @@ const router = express.Router();
 // handling new folder creation logic
 router.post("/create/{:parentFolderId}", async (req, res) => {
   try {
-    const parentFolderId = req.params.parentFolderId || foldersData?.[0]?.id;
+    const parentFolderId = req.params.parentFolderId || req.user.rootFolderId;
     if (!parentFolderId)
       return res
         .status(400)
@@ -24,12 +24,19 @@ router.post("/create/{:parentFolderId}", async (req, res) => {
       (folder) => folder.id === parentFolderId,
     );
 
+    if (parentFolder.userId !== req.user.id) {
+      return res
+        .status(403)
+        .json({ message: "You are not authorized to create this folder" });
+    }
+
     const newFolderData = {
       id,
       folderName,
       parentFolderId: parentFolderId,
       files: [],
       folders: [],
+      userId: req.user.id,
     };
 
     parentFolder.folders?.push(id);
@@ -50,8 +57,15 @@ router.patch("/edit/:folderId", async (req, res) => {
   try {
     const folderId = req.params.folderId;
     const folderData = foldersData.find((folder) => folder.id === folderId);
+
     if (!folderData || folderData === -1)
       return res.status(404).json({ message: "Folder doesnt exist" });
+
+    if (folderData.userId !== req.user.id) {
+      return res
+        .status(403)
+        .json({ message: "You are authorized to edit this folder" });
+    }
 
     const newFolderName = req.body.newFolderName;
     if (newFolderName === folderData.folderName) {
@@ -74,12 +88,17 @@ router.patch("/edit/:folderId", async (req, res) => {
 
 router.get("/{:folderId}", async (req, res) => {
   try {
-    const { folderId } = req.params;
-    const folderData = folderId
-      ? foldersData.find((folder) => folder.id === folderId)
-      : foldersData[0];
+    const folderId = req.params.folderId || req.user.rootFolderId;
+    const folderData = foldersData.find((folder) => folder.id === folderId);
+
     if (!folderData || folderData === -1)
       return res.status(404).json({ message: "Folder doesnt exist" });
+
+    if (folderData.userId !== req.user.id) {
+      return res
+        .status(403)
+        .json({ message: "You are not authorized to access this folder" });
+    }
 
     const resolvedFiles = folderData.files?.map((id) =>
       filesData.find((file) => file.id === id),
@@ -123,6 +142,12 @@ router.delete("/delete/:folderId", async (req, res) => {
     const targetFolder = foldersData.find((folder) => folder.id === folderId);
     if (!targetFolder || targetFolder === -1)
       return res.status(404).json({ message: "Folder doesnt exist" });
+
+    if (targetFolder.userId !== req.user.id) {
+      return res
+        .status(403)
+        .json({ message: "You are not authorized to delete this folder" });
+    }
 
     const { folderIds, fileIds } = getFolderContentsRecursive(
       folderId,
