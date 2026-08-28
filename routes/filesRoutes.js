@@ -52,6 +52,16 @@ router.delete("/delete/:fileId", async (req, res) => {
 router.get("/:id", (req, res) => {
   const { id } = req.params;
   const fileData = filesData.find((file) => file.id === id);
+  const parentFolder = foldersData.find(
+    (folder) => folder.id === fileData.parentFolderId,
+  );
+
+  if (parentFolder.userId !== req.user.id) {
+    return res
+      .status(401)
+      .json({ message: "You are not authorized to view this file" });
+  }
+
   if (!fileData) {
     return res.status(404).json({ message: "File not found!" });
   }
@@ -72,7 +82,17 @@ router.get("/:id", (req, res) => {
 // handling the posted files from the client
 router.post("/upload/{:parentFolderId}", async (req, res) => {
   try {
-    const parentFolderId = req.params.parentFolderId || foldersData[0].id;
+    const parentFolderId = req.params.parentFolderId || req.user.rootFolderId;
+    const parentFolder = foldersData.find(
+      (folder) => folder.id === parentFolderId,
+    );
+
+    if (parentFolder.userId !== req.user.id) {
+      return res
+        .status(401)
+        .json({ message: "You are not authorized to upload this file" });
+    }
+
     const fileName = req.headers.filename;
     if (!fileName)
       return res.status(400).json({ message: "Filename is required" });
@@ -123,6 +143,16 @@ router.patch("/edit/:fileId", async (req, res) => {
   try {
     const { fileId } = req.params;
     const fileData = filesData.find((file) => file.id === fileId);
+    const parentFolder = foldersData.find(
+      (folder) => folder.id === fileData.parentFolderId,
+    );
+
+    if (parentFolder.userId !== req.user.id) {
+      return res
+        .status(401)
+        .json({ message: "You are authorizeed to edit this file" });
+    }
+
     if (!fileData || fileData === -1)
       return res.status(404).json({ message: "File doesnt exist" });
 
@@ -132,9 +162,8 @@ router.patch("/edit/:fileId", async (req, res) => {
     if (!parentFolderData || parentFolderData === -1)
       return res.status(404).json({ message: "Parent folder doesnt exist" });
 
-    const folderData = parentFolderData.files.find(
-      (file) => file.id === fileId,
-    );
+    const folderData = filesData.find((file) => file.id === fileId);
+
     if (!folderData || folderData === -1)
       return res
         .status(404)
