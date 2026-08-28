@@ -7,27 +7,27 @@ import filesRoutes from "./routes/filesRoutes.js";
 import folderRoutes from "./routes/folderRoutes.js";
 import usersRoutes from "./routes/usersRoutes.js";
 import { STORAGE_PATH } from "./utils/paths.js";
+import cors from "cors";
+import cookieParser from "cookie-parser";
+import { checkAuth } from "./middlewares/authMiddleware.js";
 
 const app = express();
 const PORT = 3000;
 app.use(express.json());
+app.use(cors({ origin: "http://localhost:5173", credentials: true }));
+app.use(cookieParser());
 
 // response header setter
 app.use((req, res, next) => {
   if (req.query.action === "download") {
     res.setHeader("Content-Disposition", "attachment");
   }
-  res.set({
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "*",
-    "Access-Control-Allow-Headers": "*",
-  });
   next();
 });
 
 app.use(express.static(STORAGE_PATH));
-app.use("/files", filesRoutes);
-app.use("/folder", folderRoutes);
+app.use("/files", checkAuth, filesRoutes);
+app.use("/folder", checkAuth, folderRoutes);
 app.use("/users", usersRoutes);
 
 app.listen(PORT, () => {
