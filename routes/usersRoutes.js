@@ -5,6 +5,7 @@ import { pipeline } from "stream/promises";
 import foldersData from "../foldersDB.json" with { type: "json" };
 import usersData from "../usersDB.json" with { type: "json" };
 import crypto from "crypto";
+import { checkAuth } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
@@ -62,6 +63,20 @@ router.post("/login", (req, res) => {
   });
 
   return res.status(201).json({ message: "Logged in successfully" });
+});
+
+router.post("/logout", (req, res) => {
+  res.clearCookie("uid", {
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: 0,
+  });
+
+  return res.status(200).json({ message: "Logged out successfully" });
+});
+
+router.get("/", checkAuth, (req, res) => {
+  return res.status(200).json({ name: req.user.name, email: req.user.email });
 });
 
 export default router;
