@@ -8,11 +8,15 @@ import filesData from "../filesDB.json" with { type: "json" };
 import foldersData from "../foldersDB.json" with { type: "json" };
 import { extension } from "mime-types";
 import crypto from "crypto";
+import idAuth from "../middlewares/idAuthMiddleware.js";
 
 const router = express.Router();
 
+router.param("parentFolderId", idAuth);
+router.param("fileId", idAuth);
+
 // file deleting logic
-router.delete("/delete/:fileId", async (req, res) => {
+router.delete("/:fileId", async (req, res) => {
   try {
     const { fileId } = req.params;
     const fileIdx = filesData.findIndex((file) => file.id === fileId);
@@ -49,9 +53,9 @@ router.delete("/delete/:fileId", async (req, res) => {
 });
 
 // getting files from path
-router.get("/:id", (req, res) => {
-  const { id } = req.params;
-  const fileData = filesData.find((file) => file.id === id);
+router.get("/:fileId", (req, res) => {
+  const { fileId } = req.params;
+  const fileData = filesData.find((file) => file.id === fileId);
   const parentFolder = foldersData.find(
     (folder) => folder.id === fileData.parentFolderId,
   );
@@ -66,7 +70,7 @@ router.get("/:id", (req, res) => {
     return res.status(404).json({ message: "File not found!" });
   }
 
-  const filePath = `${STORAGE_PATH}/${id}${fileData.fileExtension}`;
+  const filePath = `${STORAGE_PATH}/${fileId}${fileData.fileExtension}`;
   if (req.query.action === "download") {
     res.set("Content-Disposition", `attachment; filename=${fileData.fileName}`);
   }
@@ -80,7 +84,7 @@ router.get("/:id", (req, res) => {
 });
 
 // handling the posted files from the client
-router.post("/upload/{:parentFolderId}", async (req, res) => {
+router.post("/{:parentFolderId}", async (req, res) => {
   try {
     const parentFolderId = req.params.parentFolderId || req.user.rootFolderId;
     const parentFolder = foldersData.find(
@@ -139,7 +143,7 @@ router.post("/upload/{:parentFolderId}", async (req, res) => {
 });
 
 // handling file rename stuff
-router.patch("/edit/:fileId", async (req, res) => {
+router.patch("/:fileId", async (req, res) => {
   try {
     const { fileId } = req.params;
     const fileData = filesData.find((file) => file.id === fileId);

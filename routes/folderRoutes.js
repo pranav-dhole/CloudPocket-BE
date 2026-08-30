@@ -5,11 +5,15 @@ import { STORAGE_PATH } from "../utils/paths.js";
 import filesData from "../filesDB.json" with { type: "json" };
 import foldersData from "../foldersDB.json" with { type: "json" };
 import { getFolderContentsRecursive } from "../utils/getFolderContentsRecursive.js";
+import idAuth from "../middlewares/idAuthMiddleware.js";
 
 const router = express.Router();
 
+router.param("parentFolderId", idAuth);
+router.param("folderId", idAuth);
+
 // handling new folder creation logic
-router.post("/create/{:parentFolderId}", async (req, res) => {
+router.post("/{:parentFolderId}", async (req, res) => {
   try {
     const parentFolderId = req.params.parentFolderId || req.user.rootFolderId;
     if (!parentFolderId)
@@ -53,7 +57,7 @@ router.post("/create/{:parentFolderId}", async (req, res) => {
 });
 
 // handling file rename stuff
-router.patch("/edit/:folderId", async (req, res) => {
+router.patch("/:folderId", async (req, res) => {
   try {
     const folderId = req.params.folderId;
     const folderData = foldersData.find((folder) => folder.id === folderId);
@@ -136,7 +140,7 @@ router.get("/{:folderId}", async (req, res) => {
   }
 });
 
-router.delete("/delete/:folderId", async (req, res) => {
+router.delete("/:folderId", async (req, res) => {
   try {
     const { folderId } = req.params;
     const targetFolder = foldersData.find((folder) => folder.id === folderId);
