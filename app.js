@@ -10,26 +10,38 @@ import { STORAGE_PATH } from "./utils/paths.js";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 import { checkAuth } from "./middlewares/authMiddleware.js";
+import { connectDB } from "./database.js";
 
-const app = express();
-const PORT = 3000;
-app.use(express.json());
-app.use(cors({ origin: "http://localhost:5173", credentials: true }));
-app.use(cookieParser());
+try {
+  const db = await connectDB();
+  const app = express();
+  const PORT = 3000;
+  app.use(express.json());
+  app.use(cors({ origin: "http://localhost:5173", credentials: true }));
+  app.use(cookieParser());
 
-// response header setter
-app.use((req, res, next) => {
-  if (req.query.action === "download") {
-    res.setHeader("Content-Disposition", "attachment");
-  }
-  next();
-});
+  // response header setter
+  app.use((req, res, next) => {
+    if (req.query.action === "download") {
+      res.setHeader("Content-Disposition", "attachment");
+    }
+    next();
+  });
 
-app.use(express.static(STORAGE_PATH));
-app.use("/files", checkAuth, filesRoutes);
-app.use("/folder", checkAuth, folderRoutes);
-app.use("/users", usersRoutes);
+  app.use(express.static(STORAGE_PATH));
 
-app.listen(PORT, () => {
-  console.log(`listening on port ${PORT}`);
-});
+  app.use((req, res, next) => {
+    req.db = db;
+    next();
+  });
+  app.use("/files", checkAuth, filesRoutes);
+  app.use("/folder", checkAuth, folderRoutes);
+  app.use("/users", usersRoutes);
+
+  app.listen(PORT, () => {
+    console.log(`listening on port ${PORT}`);
+  });
+} catch (err) {
+  console.log("Couldn't connect to database!");
+  console.error(err);
+}
