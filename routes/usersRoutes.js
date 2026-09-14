@@ -1,76 +1,76 @@
 import express from "express";
-import { createWriteStream } from "fs";
-import { mkdir, readdir, rename, rm, stat, writeFile } from "fs/promises";
-import { pipeline } from "stream/promises";
-import foldersData from "../foldersDB.json" with { type: "json" };
-import usersData from "../usersDB.json" with { type: "json" };
-import crypto from "crypto";
 import { checkAuth } from "../middlewares/authMiddleware.js";
+import { ObjectId } from "mongodb";
 
 const router = express.Router();
 
+// handling the registeration of an new user
 router.post("/register", async (req, res) => {
   const { name, email, password } = req.body;
-  const isEmailPresent = usersData.find((user) => user.email === email);
+  const db = req.db;
+  try {
+    const isEmailPresent = await db.collection("users").findOne({ email });
+    if (isEmailPresent) {
+      return res.status(409).json({
+        message:
+          "User with such email already exists, please try with another email",
+      });
+    }
 
-  if (isEmailPresent) {
-    return res.status(409).json({
-      message:
-        "User with such email already exists, please try with another email",
+    const rootFolder = await db.collection("folders").insertOne({
+      name: `root-${email}`,
+      parentFolderId: null,
     });
+    const folderId = rootFolder.insertedId;
+
+    const newUser = await db.collection("users").insertOne({
+      name,
+      email,
+      password,
+      rootFolderId: folderId,
+    });
+
+    const userId = newUser.insertedId;
+    await db
+      .collection("folders")
+      .updateOne({ _id: folderId }, { $set: { userId } });
+
+    return res.status(201).json({ message: "Account registered successfully" });
+  } catch (err) {
+    console.error(err);
+    return res
+      .status(500)
+      .json({ message: "Internal server error while registering" });
   }
-
-  const userId = crypto.randomUUID();
-  const folderId = crypto.randomUUID();
-
-  const uuidRegex =
-    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
-  if (!uuidRegex.test(userId) || !uuidRegex.test(folderId)) {
-    return res.status(400).json({ message: "Invalid ID" });
-  }
-
-  foldersData.push({
-    id: folderId,
-    name: `root-${email}`,
-    userId,
-    parentFolderId: null,
-    files: [],
-    folders: [],
-  });
-
-  usersData.push({
-    id: userId,
-    name,
-    email,
-    password,
-    rootFolderId: folderId,
-  });
-
-  await Promise.all([
-    writeFile("./usersDB.json", JSON.stringify(usersData, null, 2)),
-    writeFile("./foldersDB.json", JSON.stringify(foldersData, null, 2)),
-  ]);
-  return res.status(201).json({ message: "Account registered successfully" });
 });
 
-router.post("/login", (req, res) => {
+// handling login of an registered user
+router.post("/login", async (req, res) => {
   const { email, password } = req.body;
-  const user = usersData.find((user) => user.email === email);
-  const uid = user.id;
+  const db = req.db;
+  try {
+    const user = await db.collection("users").findOne({ email, password });
 
-  if (!user || user.password !== password) {
-    return res.status(401).json({ message: "Invalid Credentials" });
+    if (!user) {
+      return res.status(401).json({ message: "Invalid Credentials" });
+    }
+
+    res.cookie("uid", user._id.toString(), {
+      httpOnly: true,
+      sameSite: "lax",
+      maxAge: 60 * 1000 * 60,
+    });
+
+    return res.status(201).json({ message: "Logged in successfully" });
+  } catch (err) {
+    console.error(err);
+    return res
+      .status(500)
+      .json({ message: "Internal server error while logging in" });
   }
-
-  res.cookie("uid", uid, {
-    httpOnly: true,
-    sameSite: "lax",
-    maxAge: 60 * 1000 * 60,
-  });
-
-  return res.status(201).json({ message: "Logged in successfully" });
 });
 
+// handling logout of an registered user
 router.post("/logout", (req, res) => {
   res.clearCookie("uid", {
     httpOnly: true,
@@ -81,6 +81,7 @@ router.post("/logout", (req, res) => {
   return res.status(200).json({ message: "Logged out successfully" });
 });
 
+// getting basic user info i.e name and email to display on its profile
 router.get("/", checkAuth, (req, res) => {
   return res.status(200).json({ name: req.user.name, email: req.user.email });
 });
