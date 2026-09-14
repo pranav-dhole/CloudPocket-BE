@@ -1,21 +1,21 @@
 import express from "express";
-import { mkdir, rename, rm, writeFile } from "fs/promises";
+import { rm } from "fs/promises";
 import path, { join } from "path";
 import { STORAGE_PATH } from "../utils/paths.js";
-import filesData from "../filesDB.json" with { type: "json" };
-import foldersData from "../foldersDB.json" with { type: "json" };
 import { getFolderContentsRecursive } from "../utils/getFolderContentsRecursive.js";
 import idAuth from "../middlewares/idAuthMiddleware.js";
+import { ObjectId } from "mongodb";
 
 const router = express.Router();
 
-router.param("parentFolderId", idAuth);
-router.param("folderId", idAuth);
+// router.param("parentFolderId", idAuth);
+// router.param("folderId", idAuth);
 
 // handling new folder creation logic
 router.post("/{:parentFolderId}", async (req, res) => {
   try {
     const parentFolderId = req.params.parentFolderId || req.user.rootFolderId;
+    const parentFolderObjectId = new ObjectId(parentFolderId);
     if (!parentFolderId)
       return res
         .status(400)
@@ -23,29 +23,23 @@ router.post("/{:parentFolderId}", async (req, res) => {
 
     const folderName =
       (req.headers.foldername && req.headers.foldername.trim()) || "New Folder";
-    const id = crypto.randomUUID();
-    const parentFolder = foldersData.find(
-      (folder) => folder.id === parentFolderId,
-    );
 
-    if (parentFolder.userId !== req.user.id) {
+    const db = req.db;
+    const parentFolder = await db
+      .collection("folders")
+      .findOne({ _id: parentFolderObjectId });
+
+    if (parentFolder.userId.toString() !== req.user._id.toString()) {
       return res
         .status(403)
         .json({ message: "You are not authorized to create this folder" });
     }
 
-    const newFolderData = {
-      id,
+    await db.collection("folders").insertOne({
       folderName,
-      parentFolderId: parentFolderId,
-      files: [],
-      folders: [],
-      userId: req.user.id,
-    };
-
-    parentFolder.folders?.push(id);
-    foldersData.push(newFolderData);
-    await writeFile("./foldersDB.json", JSON.stringify(foldersData, null, 2));
+      parentFolderId: parentFolderObjectId,
+      userId: req.user._id,
+    });
 
     return res.status(201).json({ message: "Folder created successfully" });
   } catch (err) {
@@ -60,12 +54,17 @@ router.post("/{:parentFolderId}", async (req, res) => {
 router.patch("/:folderId", async (req, res) => {
   try {
     const folderId = req.params.folderId;
-    const folderData = foldersData.find((folder) => folder.id === folderId);
+    const folderObjectId = new ObjectId(folderId);
+    const user = req.user;
+    const db = req.db;
+    const folderData = await db
+      .collection("folders")
+      .findOne({ _id: folderObjectId });
 
-    if (!folderData || folderData === -1)
+    if (!folderData)
       return res.status(404).json({ message: "Folder doesnt exist" });
 
-    if (folderData.userId !== req.user.id) {
+    if (folderData.userId.toString() !== req.user._id.toString()) {
       return res
         .status(403)
         .json({ message: "You are authorized to edit this folder" });
@@ -78,9 +77,13 @@ router.patch("/:folderId", async (req, res) => {
       return res.status(400).json({ message: "Folder name is required" });
     }
 
-    folderData.folderName = newFolderName;
+    await db
+      .collection("folders")
+      .updateOne(
+        { _id: folderObjectId, userId: user._id },
+        { $set: { folderName: newFolderName } },
+      );
 
-    await writeFile("./foldersDB.json", JSON.stringify(foldersData, null, 2));
     return res.status(200).json({ message: "Folder renamed successfully" });
   } catch (err) {
     console.error(err);
@@ -90,48 +93,40 @@ router.patch("/:folderId", async (req, res) => {
   }
 });
 
+// getting folder files/folders of an requested folder
 router.get("/{:folderId}", async (req, res) => {
   try {
     const folderId = req.params.folderId || req.user.rootFolderId;
-    const folderData = foldersData.find((folder) => folder.id === folderId);
+    const folderObjectId = new ObjectId(folderId);
+    const db = req.db;
+    const folderData = await db
+      .collection("folders")
+      .findOne({ _id: folderObjectId });
 
-    if (!folderData || folderData === -1)
+    if (!folderData)
       return res.status(404).json({ message: "Folder doesnt exist" });
 
-    if (folderData.userId !== req.user.id) {
+    if (folderData.userId.toString() !== req.user._id.toString()) {
       return res
         .status(403)
         .json({ message: "You are not authorized to access this folder" });
     }
 
-    const resolvedFiles = folderData.files?.map((id) =>
-      filesData.find((file) => file.id === id),
-    );
+    const files = await db
+      .collection("files")
+      .find({ parentFolderId: folderObjectId })
+      .toArray();
+    const folders = await db
+      .collection("folders")
+      .find({ parentFolderId: folderObjectId })
+      .toArray();
 
-    const resolvedFolders = folderData.folders.map((id) =>
-      foldersData.find((folder) => folder.id === id),
-    );
-
-    const hasResolvedFiles =
-      !resolvedFiles || resolvedFiles.includes(undefined);
-    const hasResolvedFolders =
-      !resolvedFolders || resolvedFolders.includes(undefined);
-
-    if (hasResolvedFiles || hasResolvedFolders)
-      return res
-        .status(404)
-        .json({ message: "One or more files OR folders dont exist" });
-
-    const files = resolvedFiles.map(({ id, fileName }) => ({
-      id,
-      fileName,
-    }));
-    const folders = resolvedFolders.map(({ id, folderName }) => ({
-      id,
-      folderName,
-    }));
-
-    return res.status(200).json({ ...folderData, files, folders });
+    const formatDoc = ({ _id, ...doc }) => ({ id: _id, ...doc });
+    return res.status(200).json({
+      ...formatDoc(folderData),
+      files: files.map(formatDoc),
+      folders: folders.map(formatDoc),
+    });
   } catch (err) {
     console.error(err);
     return res
@@ -140,64 +135,49 @@ router.get("/{:folderId}", async (req, res) => {
   }
 });
 
+// deleting files and folders of an requested folder from all levels using recursive method
 router.delete("/:folderId", async (req, res) => {
   try {
     const { folderId } = req.params;
-    const targetFolder = foldersData.find((folder) => folder.id === folderId);
-    if (!targetFolder || targetFolder === -1)
+    const folderObjectId = new ObjectId(folderId);
+    const userId = req.user._id;
+
+    const db = req.db;
+    const targetFolder = await db
+      .collection("folders")
+      .findOne({ _id: folderObjectId });
+
+    if (!targetFolder)
       return res.status(404).json({ message: "Folder doesnt exist" });
 
-    if (targetFolder.userId !== req.user.id) {
+    if (targetFolder.userId.toString() !== userId.toString()) {
       return res
         .status(403)
         .json({ message: "You are not authorized to delete this folder" });
     }
 
-    const { folderIds, fileIds } = getFolderContentsRecursive(
-      folderId,
-      foldersData,
+    const { folderIds, fileIds } = await getFolderContentsRecursive(
+      db,
+      folderObjectId,
+      userId,
     );
 
-    for (const fileId of fileIds) {
-      const fileData = filesData.find((f) => f.id === fileId);
-      if (fileData) {
-        try {
-          const filePath = `${STORAGE_PATH}/${fileData.id}${fileData.fileExtension}`;
-          await rm(filePath, { force: true, recursive: true });
-        } catch (err) {
-          console.warn(err);
-          return res.status(500).json({
-            message: "Error occured while deleting files from folder deletion",
-          });
-        }
+    for (const file of fileIds) {
+      try {
+        const filePath = `${STORAGE_PATH}/${file._id}${file.fileExtension}`;
+        await rm(filePath, { force: true, recursive: true });
+      } catch (err) {
+        console.warn(err);
+        return res.status(500).json({
+          message: "Error occured while deleting files from folder deletion",
+        });
       }
     }
 
-    for (let i = filesData.length - 1; i >= 0; i--) {
-      if (fileIds.includes(filesData[i]?.id)) {
-        filesData.splice(i, 1);
-      }
-    }
-    for (let i = foldersData.length - 1; i >= 0; i--) {
-      if (folderIds.includes(foldersData[i]?.id)) {
-        foldersData.splice(i, 1);
-      }
-    }
-
-    if (targetFolder.parentFolderId) {
-      const parentFolder = foldersData.find(
-        (folder) => folder.id === targetFolder.parentFolderId,
-      );
-      if (parentFolder) {
-        parentFolder.folders = parentFolder.folders.filter(
-          (dirId) => dirId !== folderId,
-        );
-      }
-    }
-
+    const extractedFileIds = fileIds.map((file) => file._id);
     await Promise.all([
-      writeFile("./filesDB.json", JSON.stringify(filesData, null, 2)),
-      writeFile("./foldersDB.json", JSON.stringify(foldersData, null, 2)),
+      db.collection("files").deleteMany({ _id: { $in: extractedFileIds } }),
+      db.collection("folders").deleteMany({ _id: { $in: folderIds } }),
     ]);
 
     return res
