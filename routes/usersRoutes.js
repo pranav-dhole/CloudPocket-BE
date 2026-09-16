@@ -16,24 +16,23 @@ router.post("/register", async (req, res) => {
           "User with such email already exists, please try with another email",
       });
     }
+    const rootFolderId = new ObjectId();
+    const newUserId = new ObjectId();
 
     const rootFolder = await db.collection("folders").insertOne({
+      _id: rootFolderId,
       name: `root-${email}`,
       parentFolderId: null,
+      userId: newUserId,
     });
-    const folderId = rootFolder.insertedId;
 
     const newUser = await db.collection("users").insertOne({
+      _id: newUserId,
       name,
       email,
       password,
-      rootFolderId: folderId,
+      rootFolderId,
     });
-
-    const userId = newUser.insertedId;
-    await db
-      .collection("folders")
-      .updateOne({ _id: folderId }, { $set: { userId } });
 
     return res.status(201).json({ message: "Account registered successfully" });
   } catch (err) {
