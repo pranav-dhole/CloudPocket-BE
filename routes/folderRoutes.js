@@ -8,8 +8,8 @@ import { ObjectId } from "mongodb";
 
 const router = express.Router();
 
-// router.param("parentFolderId", idAuth);
-// router.param("folderId", idAuth);
+router.param("parentFolderId", idAuth);
+router.param("folderId", idAuth);
 
 // handling new folder creation logic
 router.post("/{:parentFolderId}", async (req, res) => {
@@ -29,7 +29,7 @@ router.post("/{:parentFolderId}", async (req, res) => {
       .collection("folders")
       .findOne({ _id: parentFolderObjectId });
 
-    if (parentFolder.userId.toString() !== req.user._id.toString()) {
+    if (!parentFolder.userId.equals(req.user._id)) {
       return res
         .status(403)
         .json({ message: "You are not authorized to create this folder" });
@@ -64,7 +64,7 @@ router.patch("/:folderId", async (req, res) => {
     if (!folderData)
       return res.status(404).json({ message: "Folder doesnt exist" });
 
-    if (folderData.userId.toString() !== req.user._id.toString()) {
+    if (!folderData.userId.equals(user._id)) {
       return res
         .status(403)
         .json({ message: "You are authorized to edit this folder" });
@@ -106,7 +106,7 @@ router.get("/{:folderId}", async (req, res) => {
     if (!folderData)
       return res.status(404).json({ message: "Folder doesnt exist" });
 
-    if (folderData.userId.toString() !== req.user._id.toString()) {
+    if (!folderData.userId.equals(req.user._id)) {
       return res
         .status(403)
         .json({ message: "You are not authorized to access this folder" });
@@ -150,7 +150,7 @@ router.delete("/:folderId", async (req, res) => {
     if (!targetFolder)
       return res.status(404).json({ message: "Folder doesnt exist" });
 
-    if (targetFolder.userId.toString() !== userId.toString()) {
+    if (!targetFolder.userId.equals(userId)) {
       return res
         .status(403)
         .json({ message: "You are not authorized to delete this folder" });

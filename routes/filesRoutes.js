@@ -9,8 +9,8 @@ import { ObjectId } from "mongodb";
 
 const router = express.Router();
 
-// router.param("parentFolderId", idAuth);
-// router.param("fileId", idAuth);
+router.param("parentFolderId", idAuth);
+router.param("fileId", idAuth);
 
 // deleting the file using given fileId
 router.delete("/:fileId", async (req, res) => {
@@ -58,7 +58,7 @@ router.get("/:fileId", async (req, res) => {
   const parentFolder = await db
     .collection("folders")
     .findOne({ _id: new ObjectId(fileData.parentFolderId) });
-  if (parentFolder.userId.toString() !== req.user._id.toString()) {
+  if (!parentFolder.userId.equals(req.user._id)) {
     return res
       .status(401)
       .json({ message: "You are not authorized to view this file" });
@@ -90,7 +90,7 @@ router.post("/{:parentFolderId}", async (req, res) => {
       .findOne({ _id: parentFolderObjectId });
     if (!parentFolder)
       return res.status(404).json({ message: "Parent folder doesnt exist" });
-    if (parentFolder.userId.toString() !== req.user._id.toString()) {
+    if (!parentFolder.userId.equals(req.user._id)) {
       return res
         .status(401)
         .json({ message: "You are not authorized to upload this file" });
@@ -154,7 +154,7 @@ router.patch("/:fileId", async (req, res) => {
       .findOne({ _id: new ObjectId(fileData.parentFolderId) });
     if (!parentFolder)
       return res.status(404).json({ message: "Parent folder doesnt exist" });
-    if (parentFolder.userId.toString() !== req.user._id.toString()) {
+    if (!parentFolder.userId.equals(req.user._id)) {
       return res
         .status(401)
         .json({ message: "You are authorizeed to edit this file" });
