@@ -36,7 +36,7 @@ router.post("/{:parentFolderId}", async (req, res) => {
     }
 
     await db.collection("folders").insertOne({
-      folderName,
+      name: folderName,
       parentFolderId: parentFolderObjectId,
       userId: req.user._id,
     });
@@ -71,7 +71,7 @@ router.patch("/:folderId", async (req, res) => {
     }
 
     const newFolderName = req.body.newFolderName;
-    if (newFolderName === folderData.folderName) {
+    if (newFolderName === folderData.name) {
       return res.status(403).json({ message: "Folder name denied" });
     } else if (!newFolderName || !newFolderName.trim()) {
       return res.status(400).json({ message: "Folder name is required" });
@@ -81,7 +81,7 @@ router.patch("/:folderId", async (req, res) => {
       .collection("folders")
       .updateOne(
         { _id: folderObjectId, userId: user._id },
-        { $set: { folderName: newFolderName } },
+        { $set: { name: newFolderName } },
       );
 
     return res.status(200).json({ message: "Folder renamed successfully" });
