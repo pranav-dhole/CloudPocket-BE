@@ -66,7 +66,7 @@ router.get("/:fileId", async (req, res) => {
 
   const filePath = `${STORAGE_PATH}/${fileId}${fileData.fileExtension}`;
   if (req.query.action === "download") {
-    res.set("Content-Disposition", `attachment; filename=${fileData.fileName}`);
+    res.set("Content-Disposition", `attachment; filename=${fileData.name}`);
   }
   res.sendFile(filePath, (err) => {
     if (err) {
@@ -106,7 +106,7 @@ router.post("/{:parentFolderId}", async (req, res) => {
 
     const newFileRecord = await db.collection("files").insertOne({
       fileExtension,
-      fileName: decodedFileName,
+      name: decodedFileName,
       parentFolderId: parentFolderObjectId,
     });
     createdFileId = newFileRecord.insertedId;
@@ -161,7 +161,7 @@ router.patch("/:fileId", async (req, res) => {
     }
 
     const newFileName = req.body.newFileName;
-    if (newFileName === fileData.fileName) {
+    if (newFileName === fileData.name) {
       return res.status(403).json({ message: "Filename denied" });
     } else if (!newFileName) {
       return res.status(400).json({ message: "File name is required" });
@@ -169,7 +169,7 @@ router.patch("/:fileId", async (req, res) => {
 
     await db
       .collection("files")
-      .updateOne({ _id: fileObjectId }, { $set: { fileName: newFileName } });
+      .updateOne({ _id: fileObjectId }, { $set: { name: newFileName } });
 
     return res.status(200).json({ message: "File renamed successfully" });
   } catch (err) {
