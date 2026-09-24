@@ -1,13 +1,21 @@
 import express from "express";
 import { checkAuth } from "../middlewares/authMiddleware.js";
 import { ObjectId } from "mongodb";
+import { client } from "../database.js";
 
 const router = express.Router();
 
 // handling the registeration of an new user
 router.post("/register", async (req, res) => {
   const { name, email, password } = req.body;
+  if (!name || name.trim().length < 3) {
+    return res.status(400).json({
+      message: "Name must be at least 3 characters long",
+    });
+  }
   const db = req.db;
+
+  const session = client.startSession();
   try {
     const isEmailPresent = await db.collection("users").findOne({ email });
     if (isEmailPresent) {
@@ -19,27 +27,38 @@ router.post("/register", async (req, res) => {
     const rootFolderId = new ObjectId();
     const newUserId = new ObjectId();
 
-    const rootFolder = await db.collection("folders").insertOne({
-      _id: rootFolderId,
-      name: `root-${email}`,
-      parentFolderId: null,
-      userId: newUserId,
-    });
+    session.startTransaction();
+    const rootFolder = await db.collection("folders").insertOne(
+      {
+        _id: rootFolderId,
+        name: `root-${email}`,
+        parentFolderId: null,
+        userId: newUserId,
+      },
+      { session },
+    );
 
-    const newUser = await db.collection("users").insertOne({
-      _id: newUserId,
-      name,
-      email,
-      password,
-      rootFolderId,
-    });
+    const newUser = await db.collection("users").insertOne(
+      {
+        _id: newUserId,
+        name,
+        email,
+        password,
+        rootFolderId,
+      },
+      { session },
+    );
 
+    await session.commitTransaction();
     return res.status(201).json({ message: "Account registered successfully" });
   } catch (err) {
-    console.error(err);
+    await session.abortTransaction();
+    console.error("Registration error:", err);
     return res
       .status(500)
       .json({ message: "Internal server error while registering" });
+  } finally {
+    await session.endSession();
   }
 });
 
