@@ -1,7 +1,7 @@
 import { MongoClient } from "mongodb";
 import { readFile } from "fs/promises";
 
-const client = new MongoClient("mongodb://localhost:27017/");
+export const client = new MongoClient("mongodb://localhost:27017/");
 
 export async function connectDB() {
   await client.connect();
