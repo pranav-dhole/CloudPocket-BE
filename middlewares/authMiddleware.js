@@ -1,4 +1,5 @@
 import { ObjectId } from "mongodb";
+import { User } from "../models/userModel.js";
 
 export async function checkAuth(req, res, next) {
   const { uid } = req.cookies;
@@ -6,9 +7,7 @@ export async function checkAuth(req, res, next) {
     return res.status(401).json({ message: "Not an valid user" });
   }
   const db = req.db;
-  const loggedInUser = await db
-    .collection("users")
-    .findOne({ _id: new ObjectId(uid) });
+  const loggedInUser = await User.findOne({ _id: new ObjectId(uid) }).lean();
 
   if (!loggedInUser) {
     return res.status(401).json({ message: "Not an valid user" });

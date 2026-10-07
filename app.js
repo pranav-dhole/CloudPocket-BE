@@ -31,7 +31,6 @@ try {
   app.use(express.static(STORAGE_PATH));
 
   app.use((req, res, next) => {
-    req.db = db;
     next();
   });
   app.use("/files", checkAuth, filesRoutes);
