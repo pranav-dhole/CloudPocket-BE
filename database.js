@@ -1,18 +1,17 @@
-import { MongoClient } from "mongodb";
-import { readFile } from "fs/promises";
-
-export const client = new MongoClient("mongodb://localhost:27017/");
+import mongoose from "mongoose";
 
 export async function connectDB() {
-  await client.connect();
-  console.log("Connected to database");
-
-  const db = client.db("cloudpockets");
-  return db;
+  try {
+    await mongoose.connect("mongodb://localhost:27017/cloudpockets");
+    console.log("Connected to database");
+  } catch (err) {
+    console.log(err);
+    process.exit(1);
+  }
 }
 
 process.on("SIGINT", async () => {
-  await client.close();
+  await mongoose.disconnect();
   console.log("Disconnected from database");
   process.exit(0);
 });
