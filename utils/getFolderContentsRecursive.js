@@ -1,10 +1,10 @@
-import { ObjectId } from "mongodb";
 import { Folder } from "../models/folderModel.js";
 import { File } from "../models/fileModel.js";
+import { Types } from "mongoose";
 
 // getting all the files(id & fileExtension) and folders(id) info of an given targetFolderId recursively
 export async function getFolderContentsRecursive(targetFolderId, userId) {
-  let allFolderIds = [new ObjectId(targetFolderId)];
+  let allFolderIds = [new Types.ObjectId(targetFolderId)];
   let allFileIds = [];
 
   const files = await File.find({

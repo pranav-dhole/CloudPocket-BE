@@ -4,14 +4,14 @@ import { pipeline } from "stream/promises";
 import path, { join } from "path";
 import { STORAGE_PATH } from "../utils/paths.js";
 import idAuth from "../middlewares/idAuthMiddleware.js";
-import { ObjectId } from "mongodb";
 import { File } from "../models/fileModel.js";
 import { Folder } from "../models/folderModel.js";
+import { Types } from "mongoose";
 
 export async function deleteFile(req, res) {
   try {
     const { fileId } = req.params;
-    const fileObjectId = new ObjectId(fileId);
+    const fileObjectId = new Types.ObjectId(fileId);
     const fileData = await File.findOne({ _id: fileObjectId }).lean();
     if (!fileData) {
       return res.status(404).json({ message: "File doesnt exist" });
@@ -39,14 +39,14 @@ export async function deleteFile(req, res) {
 
 export async function getFile(req, res) {
   const { fileId } = req.params;
-  const fileObjectId = new ObjectId(fileId);
+  const fileObjectId = new Types.ObjectId(fileId);
   const fileData = await File.findOne({ _id: fileObjectId }).lean();
   if (!fileData) {
     return res.status(404).json({ message: "File not found!" });
   }
 
   const parentFolder = await Folder.findOne({
-    _id: new ObjectId(fileData.parentFolderId),
+    _id: new Types.ObjectId(fileData.parentFolderId),
   })
     .lean()
     .select("userId");
@@ -74,7 +74,7 @@ export async function postFile(req, res) {
   let filePath = null;
   try {
     const parentFolderId = req.params.parentFolderId || req.user.rootFolderId;
-    const parentFolderObjectId = new ObjectId(parentFolderId);
+    const parentFolderObjectId = new Types.ObjectId(parentFolderId);
     const parentFolder = await Folder.findOne({
       _id: parentFolderObjectId,
     })
@@ -129,13 +129,13 @@ export async function postFile(req, res) {
 export async function editFile(req, res) {
   try {
     const { fileId } = req.params;
-    const fileObjectId = new ObjectId(fileId);
+    const fileObjectId = new Types.ObjectId(fileId);
     const fileData = await File.findOne({ _id: fileObjectId }).lean();
     if (!fileData)
       return res.status(404).json({ message: "File doesnt exist" });
 
     const parentFolder = await Folder.findOne({
-      _id: new ObjectId(fileData.parentFolderId),
+      _id: new Types.ObjectId(fileData.parentFolderId),
     })
       .lean()
       .select("userId");

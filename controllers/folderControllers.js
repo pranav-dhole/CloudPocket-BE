@@ -2,14 +2,14 @@ import { rm } from "fs/promises";
 import path, { join } from "path";
 import { STORAGE_PATH } from "../utils/paths.js";
 import { getFolderContentsRecursive } from "../utils/getFolderContentsRecursive.js";
-import { ObjectId } from "mongodb";
 import { Folder } from "../models/folderModel.js";
 import { File } from "../models/fileModel.js";
+import { Types } from "mongoose";
 
 export async function postFolder(req, res) {
   try {
     const parentFolderId = req.params.parentFolderId || req.user.rootFolderId;
-    const parentFolderObjectId = new ObjectId(parentFolderId);
+    const parentFolderObjectId = new Types.ObjectId(parentFolderId);
     if (!parentFolderId)
       return res
         .status(400)
@@ -48,7 +48,7 @@ export async function postFolder(req, res) {
 export async function editFolder(req, res) {
   try {
     const folderId = req.params.folderId;
-    const folderObjectId = new ObjectId(folderId);
+    const folderObjectId = new Types.ObjectId(folderId);
     const user = req.user;
     const folderData = await Folder.findOne({ _id: folderObjectId })
       .lean()
@@ -87,7 +87,7 @@ export async function editFolder(req, res) {
 export async function getFolderData(req, res) {
   try {
     const folderId = req.params.folderId || req.user.rootFolderId;
-    const folderObjectId = new ObjectId(folderId);
+    const folderObjectId = new Types.ObjectId(folderId);
     const folderData = await Folder.findOne({ _id: folderObjectId })
       .lean()
       .select("userId");
@@ -123,7 +123,7 @@ export async function getFolderData(req, res) {
 export async function deleteFolder(req, res) {
   try {
     const { folderId } = req.params;
-    const folderObjectId = new ObjectId(folderId);
+    const folderObjectId = new Types.ObjectId(folderId);
     const userId = req.user._id;
 
     const targetFolder = await Folder.findOne({ _id: folderObjectId })

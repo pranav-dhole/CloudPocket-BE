@@ -1,6 +1,6 @@
-import { ObjectId } from "mongodb";
 import { User } from "../models/userModel.js";
 import { Folder } from "../models/folderModel.js";
+import mongoose, { Types } from "mongoose";
 
 export async function registerUser(req, res) {
   const { name, email, password } = req.body;
@@ -10,7 +10,7 @@ export async function registerUser(req, res) {
     });
   }
 
-  const session = client.startSession();
+  const session = await mongoose.startSession();
   try {
     const isEmailPresent = await User.findOne({ email }).lean();
     if (isEmailPresent) {
@@ -19,28 +19,32 @@ export async function registerUser(req, res) {
           "User with such email already exists, please try with another email",
       });
     }
-    const rootFolderId = new ObjectId();
-    const newUserId = new ObjectId();
+    const rootFolderId = new Types.ObjectId();
+    const newUserId = new Types.ObjectId();
 
     session.startTransaction();
     const rootFolder = await Folder.create(
-      {
-        _id: rootFolderId,
-        name: `root-${email}`,
-        parentFolderId: null,
-        userId: newUserId,
-      },
+      [
+        {
+          _id: rootFolderId,
+          name: `root-${email}`,
+          parentFolderId: null,
+          userId: newUserId,
+        },
+      ],
       { session },
     );
 
     const newUser = await User.create(
-      {
-        _id: newUserId,
-        name,
-        email,
-        password,
-        rootFolderId,
-      },
+      [
+        {
+          _id: newUserId,
+          name,
+          email,
+          password,
+          rootFolderId,
+        },
+      ],
       { session },
     );
 
