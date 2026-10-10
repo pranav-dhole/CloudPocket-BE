@@ -12,13 +12,6 @@ export async function registerUser(req, res) {
 
   const session = await mongoose.startSession();
   try {
-    const isEmailPresent = await User.findOne({ email }).lean();
-    if (isEmailPresent) {
-      return res.status(409).json({
-        message:
-          "User with such email already exists, please try with another email",
-      });
-    }
     const rootFolderId = new Types.ObjectId();
     const newUserId = new Types.ObjectId();
 
@@ -52,7 +45,21 @@ export async function registerUser(req, res) {
     return res.status(201).json({ message: "Account registered successfully" });
   } catch (err) {
     await session.abortTransaction();
-    console.error("Registration error:", err);
+    console.log("Registration error:", err);
+
+    if (err.name === "ValidationError") {
+      return res.status(400).json({
+        message: Object.values(err.errors).map((e) => e.message),
+      });
+    }
+
+    if (err.code === 11000 && err.keyValue?.email) {
+      return res.status(409).json({
+        message:
+          "User with such email already exists, please try with another email",
+      });
+    }
+
     return res
       .status(500)
       .json({ message: "Internal server error while registering" });

@@ -15,6 +15,7 @@ const userSchema = new Schema({
     type: String,
     required: true,
     match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Not an valid email"],
+    unique: true,
   },
   password: {
     type: String,
