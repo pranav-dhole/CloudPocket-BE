@@ -1,6 +1,9 @@
 import { User } from "../models/userModel.js";
 import { Folder } from "../models/folderModel.js";
 import mongoose, { Types } from "mongoose";
+import crypto from "crypto";
+
+export const cookieSecret = "CLOUDPOCKETDADA";
 
 export async function registerUser(req, res) {
   const { name, email, password } = req.body;
@@ -77,7 +80,21 @@ export async function loginUser(req, res) {
       return res.status(401).json({ message: "Invalid Credentials" });
     }
 
-    res.cookie("uid", user._id.toString(), {
+    const cookiePayload = JSON.stringify({
+      id: user._id.toString(),
+      expiry: Math.round(Date.now() / 1000 + 60 * 60),
+    });
+
+    const signature = crypto
+      .createHash("sha256")
+      .update(cookieSecret)
+      .update(cookiePayload)
+      .update(cookieSecret)
+      .digest("base64url");
+
+    const signaturePayload = `${Buffer.from(cookiePayload).toString("base64url")}.${signature}`;
+
+    res.cookie("token", signaturePayload, {
       httpOnly: true,
       sameSite: "lax",
       maxAge: 60 * 1000 * 60,
@@ -93,7 +110,7 @@ export async function loginUser(req, res) {
 }
 
 export function logoutUser(req, res) {
-  res.clearCookie("uid", {
+  res.clearCookie("token", {
     httpOnly: true,
     sameSite: "lax",
     maxAge: 0,
