@@ -1,9 +1,7 @@
 import { User } from "../models/userModel.js";
 import { Folder } from "../models/folderModel.js";
 import mongoose, { Types } from "mongoose";
-import crypto from "crypto";
-
-export const cookieSecret = "CLOUDPOCKETDADA";
+import bcrypt from "bcrypt";
 
 export async function registerUser(req, res) {
   const { name, email, password } = req.body;
@@ -31,13 +29,14 @@ export async function registerUser(req, res) {
       { session },
     );
 
-    const newUser = await User.create(
+    const hashedPassword = await bcrypt.hash(password, 12);
+    await User.create(
       [
         {
           _id: newUserId,
           name,
           email,
-          password,
+          password: hashedPassword,
           rootFolderId,
         },
       ],
@@ -74,9 +73,15 @@ export async function registerUser(req, res) {
 export async function loginUser(req, res) {
   const { email, password } = req.body;
   try {
-    const user = await User.findOne({ email, password }).lean();
+    const user = await User.findOne({ email }).lean();
 
     if (!user) {
+      return res.status(401).json({ message: "Invalid Credentials" });
+    }
+
+    const isPasswordCorrect = await bcrypt.compare(password, user.password);
+    if (!isPasswordCorrect) {
+      console.log("wrong password brohhh");
       return res.status(401).json({ message: "Invalid Credentials" });
     }
 
@@ -85,18 +90,10 @@ export async function loginUser(req, res) {
       expiry: Math.round(Date.now() / 1000 + 60 * 60),
     });
 
-    const signature = crypto
-      .createHash("sha256")
-      .update(cookieSecret)
-      .update(cookiePayload)
-      .update(cookieSecret)
-      .digest("base64url");
-
-    const signaturePayload = `${Buffer.from(cookiePayload).toString("base64url")}.${signature}`;
-
-    res.cookie("token", signaturePayload, {
+    res.cookie("token", Buffer.from(cookiePayload).toString("base64url"), {
       httpOnly: true,
       sameSite: "lax",
+      signed: true,
       maxAge: 60 * 1000 * 60,
     });
 
