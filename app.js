@@ -12,13 +12,14 @@ import cookieParser from "cookie-parser";
 import { checkAuth } from "./middlewares/authMiddleware.js";
 import { connectDB } from "./database.js";
 
+const cookieSecret = "CLOUDPOCKETDADA";
 try {
   const db = await connectDB();
   const app = express();
   const PORT = 3000;
   app.use(express.json());
   app.use(cors({ origin: "http://localhost:5173", credentials: true }));
-  app.use(cookieParser());
+  app.use(cookieParser(cookieSecret));
 
   // response header setter
   app.use((req, res, next) => {
