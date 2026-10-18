@@ -2,6 +2,7 @@ import { User } from "../models/userModel.js";
 import { Folder } from "../models/folderModel.js";
 import mongoose, { Types } from "mongoose";
 import bcrypt from "bcrypt";
+import { Session } from "../models/sessionModel.js";
 
 export async function registerUser(req, res) {
   const { name, email, password } = req.body;
@@ -29,14 +30,13 @@ export async function registerUser(req, res) {
       { session },
     );
 
-    const hashedPassword = await bcrypt.hash(password, 12);
     await User.create(
       [
         {
           _id: newUserId,
           name,
           email,
-          password: hashedPassword,
+          password,
           rootFolderId,
         },
       ],
@@ -73,24 +73,29 @@ export async function registerUser(req, res) {
 export async function loginUser(req, res) {
   const { email, password } = req.body;
   try {
-    const user = await User.findOne({ email }).lean();
+    const user = await User.findOne({ email });
 
     if (!user) {
       return res.status(401).json({ message: "Invalid Credentials" });
     }
 
-    const isPasswordCorrect = await bcrypt.compare(password, user.password);
+    const isPasswordCorrect = await user.comparePassword(String(password));
     if (!isPasswordCorrect) {
-      console.log("wrong password brohhh");
       return res.status(401).json({ message: "Invalid Credentials" });
     }
 
-    const cookiePayload = JSON.stringify({
-      id: user._id.toString(),
-      expiry: Math.round(Date.now() / 1000 + 60 * 60),
+    const sessions = await Session.find({ userId: user._id }).sort({
+      createdAt: 1,
     });
+    if (sessions.length >= 2) {
+      const excessCount = sessions.length - 2 + 1;
+      const sessionsToDelete = sessions.slice(0, excessCount);
+      const idsToDelete = sessionsToDelete.map((s) => s._id);
+      await Session.deleteMany({ _id: { $in: idsToDelete } });
+    }
 
-    res.cookie("token", Buffer.from(cookiePayload).toString("base64url"), {
+    const session = await Session.create({ userId: user._id });
+    res.cookie("sid", session._id, {
       httpOnly: true,
       sameSite: "lax",
       signed: true,
@@ -106,14 +111,37 @@ export async function loginUser(req, res) {
   }
 }
 
-export function logoutUser(req, res) {
-  res.clearCookie("token", {
+export async function logoutUser(req, res) {
+  const { sid } = req.signedCookies;
+  if (sid) {
+    await Session.findByIdAndDelete(sid);
+  }
+
+  res.clearCookie("sid", {
     httpOnly: true,
     sameSite: "lax",
     maxAge: 0,
   });
 
   return res.status(200).json({ message: "Logged out successfully" });
+}
+
+export async function logoutUsers(req, res) {
+  const { sid } = req.signedCookies;
+  const session = await Session.findById(sid);
+
+  if (session) {
+    await Session.deleteMany({ userId: session.userId });
+  }
+  res.clearCookie("sid", {
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: 0,
+  });
+
+  return res
+    .status(200)
+    .json({ message: "Logged out successfully from all devices" });
 }
 
 export function userBasicInfo(req, res) {
