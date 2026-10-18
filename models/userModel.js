@@ -1,4 +1,5 @@
 import mongoose, { Schema } from "mongoose";
+import bcrypt from "bcrypt";
 
 const userSchema = new Schema({
   name: {
@@ -22,5 +23,20 @@ const userSchema = new Schema({
     required: true,
   },
 });
+
+userSchema.pre("save", async function (next) {
+  try {
+    if (!this.isModified("password")) return next();
+    this.password = await bcrypt.hash(this.password, 12);
+    next();
+  } catch (err) {
+    console.log("err while saving DOC: ", err);
+    next(err);
+  }
+});
+
+userSchema.methods.comparePassword = async function (userPassword) {
+  return await bcrypt.compare(userPassword, this.password);
+};
 
 export const User = mongoose.model("User", userSchema);
