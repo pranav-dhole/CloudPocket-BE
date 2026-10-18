@@ -3,6 +3,7 @@ import { checkAuth } from "../middlewares/authMiddleware.js";
 import {
   loginUser,
   logoutUser,
+  logoutUsers,
   registerUser,
   userBasicInfo,
 } from "../controllers/userControllers.js";
@@ -17,6 +18,9 @@ router.post("/login", loginUser);
 
 // handling logout of an registered user
 router.post("/logout", logoutUser);
+
+// handling logout from all registered users that who were logged in with that particular user id
+router.post("/logoutAll", logoutUsers);
 
 // getting basic user info i.e name and email to display on its profile
 router.get("/", checkAuth, userBasicInfo);
