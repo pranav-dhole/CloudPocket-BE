@@ -99,7 +99,7 @@ export async function loginUser(req, res) {
       httpOnly: true,
       sameSite: "lax",
       signed: true,
-      maxAge: 60 * 1000 * 60,
+      maxAge: 60 * 60 * 1000,
     });
 
     return res.status(201).json({ message: "Logged in successfully" });
@@ -127,21 +127,26 @@ export async function logoutUser(req, res) {
 }
 
 export async function logoutUsers(req, res) {
-  const { sid } = req.signedCookies;
-  const session = await Session.findById(sid);
+  try {
+    const { sid } = req.signedCookies;
+    const session = await Session.findById(sid);
 
-  if (session) {
-    await Session.deleteMany({ userId: session.userId });
+    if (session) {
+      await Session.deleteMany({ userId: session.userId });
+    }
+    res.clearCookie("sid", {
+      httpOnly: true,
+      sameSite: "lax",
+      maxAge: 0,
+    });
+
+    return res
+      .status(200)
+      .json({ message: "Logged out successfully from all devices" });
+  } catch (err) {
+    console.error("Logout All Error:", err);
+    return res.status(500).json({ message: "Internal server error" });
   }
-  res.clearCookie("sid", {
-    httpOnly: true,
-    sameSite: "lax",
-    maxAge: 0,
-  });
-
-  return res
-    .status(200)
-    .json({ message: "Logged out successfully from all devices" });
 }
 
 export function userBasicInfo(req, res) {
