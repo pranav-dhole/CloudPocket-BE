@@ -3,3 +3,4 @@ storage
 filesDB.json
 foldersDB.json
 usersDB.json
+.env

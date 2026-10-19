@@ -6,6 +6,7 @@ import path, { join } from "path";
 import filesRoutes from "./routes/filesRoutes.js";
 import folderRoutes from "./routes/folderRoutes.js";
 import usersRoutes from "./routes/usersRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
 import { STORAGE_PATH } from "./utils/paths.js";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -37,6 +38,7 @@ try {
   app.use("/files", checkAuth, filesRoutes);
   app.use("/folder", checkAuth, folderRoutes);
   app.use("/users", usersRoutes);
+  app.use("/auth", authRoutes);
 
   app.listen(PORT, () => {
     console.log(`listening on port ${PORT}`);
