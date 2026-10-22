@@ -3,6 +3,7 @@ import { Folder } from "../models/folderModel.js";
 import mongoose, { Types } from "mongoose";
 import bcrypt from "bcrypt";
 import { Session } from "../models/sessionModel.js";
+import { OTP } from "../models/Otpmodel.js";
 
 export async function registerUser(req, res) {
   const { name, email, password } = req.body;
@@ -18,6 +19,16 @@ export async function registerUser(req, res) {
     const newUserId = new Types.ObjectId();
 
     session.startTransaction();
+
+    const otpDocument = await OTP.findOne({ email, verified: true }).session(
+      session,
+    );
+    if (!otpDocument) {
+      return res
+        .status(400)
+        .json({ message: "Email not verified. Please verify OTP first." });
+    }
+
     const rootFolder = await Folder.create(
       [
         {
@@ -43,6 +54,7 @@ export async function registerUser(req, res) {
       { session },
     );
 
+    await otpDocument.deleteOne({ session });
     await session.commitTransaction();
     return res.status(201).json({ message: "Account registered successfully" });
   } catch (err) {

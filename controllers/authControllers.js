@@ -25,7 +25,9 @@ export async function verifyOtp(req, res) {
     if (!otpDocument) {
       return res.status(404).json({ message: "OTP is invalid or expired" });
     }
-    await otpDocument.deleteOne();
+
+    otpDocument.verified = true;
+    await otpDocument.save();
     return res.status(201).json({ message: "OTP verified successfully" });
   } catch (err) {
     console.log(err);
