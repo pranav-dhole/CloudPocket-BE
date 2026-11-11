@@ -1,28 +1,32 @@
 import mongoose, { Schema } from "mongoose";
 import bcrypt from "bcrypt";
 
-const userSchema = new Schema({
-  name: {
-    type: String,
-    minLength: 3,
-    required: true,
+const userSchema = new Schema(
+  {
+    name: {
+      type: String,
+      minLength: 3,
+      required: true,
+    },
+    rootFolderId: {
+      type: Schema.Types.ObjectId,
+      required: true,
+      ref: "Folder",
+    },
+    email: {
+      type: String,
+      required: true,
+      match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Not an valid email"],
+      unique: true,
+    },
+    password: {
+      type: String,
+    },
   },
-  rootFolderId: {
-    type: Schema.Types.ObjectId,
-    required: true,
-    ref: "Folder",
+  {
+    strict: "throw",
   },
-  email: {
-    type: String,
-    required: true,
-    match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, "Not an valid email"],
-    unique: true,
-  },
-  password: {
-    type: String,
-    required: true,
-  },
-});
+);
 
 userSchema.pre("save", async function () {
   try {
