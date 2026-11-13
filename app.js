@@ -37,7 +37,7 @@ try {
   });
   app.use("/files", checkAuth, filesRoutes);
   app.use("/folder", checkAuth, folderRoutes);
-  app.use("/users", usersRoutes);
+  app.use("/user", usersRoutes);
   app.use("/auth", authRoutes);
 
   app.listen(PORT, () => {
