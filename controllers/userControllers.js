@@ -164,3 +164,45 @@ export async function logoutUsers(req, res) {
 export function userBasicInfo(req, res) {
   return res.status(200).json({ name: req.user.name, email: req.user.email });
 }
+
+export async function allUsersInfo(req, res) {
+  try {
+    if (req.user.role !== "User") {
+      const allUsers = await User.find().lean().select("name email _id");
+      const allSessions = await Session.find().lean().select("userId");
+      const allSessionsSet = new Set(
+        allSessions.map(({ userId }) => userId.toString()),
+      );
+      const transformedUsersForAdmin = allUsers.map(({ _id, name, email }) => ({
+        id: _id.toString(),
+        name,
+        email,
+        isLoggedIn: allSessionsSet.has(_id.toString()),
+      }));
+
+      const transformedUsersForManager = allUsers.map(
+        ({ _id, name, email }) => ({
+          id: _id.toString(),
+          name,
+          email,
+        }),
+      );
+
+      const finalUsersDataAuth =
+        req.user.role === "Admin"
+          ? transformedUsersForAdmin
+          : transformedUsersForManager;
+
+      return res.status(200).json(finalUsersDataAuth);
+    }
+
+    return res
+      .status(403)
+      .json({ message: "You are not authorized to access this page" });
+  } catch (err) {
+    console.log(err);
+    return res
+      .staus(500)
+      .json({ message: "Error while fetching all users data" });
+  }
+}

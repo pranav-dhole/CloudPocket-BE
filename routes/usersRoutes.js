@@ -1,6 +1,7 @@
 import express from "express";
 import { checkAuth } from "../middlewares/authMiddleware.js";
 import {
+  allUsersInfo,
   loginUser,
   logoutUser,
   logoutUsers,
@@ -24,5 +25,8 @@ router.post("/logoutAll", logoutUsers);
 
 // getting basic user info i.e name and email to display on its profile
 router.get("/", checkAuth, userBasicInfo);
+
+// getting users info like name, email & logged in status
+router.get("/users", checkAuth, allUsersInfo);
 
 export default router;
