@@ -3,6 +3,7 @@ import { checkAuth } from "../middlewares/authMiddleware.js";
 import {
   allUsersInfo,
   loginUser,
+  logoutByAdmin,
   logoutUser,
   logoutUsers,
   registerUser,
@@ -28,5 +29,8 @@ router.get("/", checkAuth, userBasicInfo);
 
 // getting users info like name, email & logged in status
 router.get("/users", checkAuth, allUsersInfo);
+
+// handling logout of an user from only admin role request for RBAC purposes
+router.post("/logoutByAdmin", checkAuth, logoutByAdmin);
 
 export default router;

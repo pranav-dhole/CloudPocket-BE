@@ -168,7 +168,10 @@ export function userBasicInfo(req, res) {
 export async function allUsersInfo(req, res) {
   try {
     if (req.user.role !== "User") {
-      const allUsers = await User.find().lean().select("name email _id");
+      const currentUserId = req.user._id;
+      const allUsers = await User.find({ _id: { $ne: currentUserId } })
+        .lean()
+        .select("name email _id");
       const allSessions = await Session.find().lean().select("userId");
       const allSessionsSet = new Set(
         allSessions.map(({ userId }) => userId.toString()),
@@ -204,5 +207,23 @@ export async function allUsersInfo(req, res) {
     return res
       .staus(500)
       .json({ message: "Error while fetching all users data" });
+  }
+}
+
+export async function logoutByAdmin(req, res) {
+  try {
+    if (req.user.role !== "Admin") {
+      return res
+        .staus(403)
+        .json({ message: "You are not authorized to logout users" });
+    }
+    const { userId } = req.body;
+    await Session.deleteMany({ userId });
+    return res.status(200).json({ message: "Logged out user successfully" });
+  } catch (err) {
+    console.log(err);
+    return res
+      .staus(500)
+      .json({ message: "Error while logging out user through admin auth" });
   }
 }
