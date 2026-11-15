@@ -1,9 +1,13 @@
 import { User } from "../models/userModel.js";
 import { Folder } from "../models/folderModel.js";
+import { File } from "../models/fileModel.js";
 import mongoose, { Types } from "mongoose";
 import bcrypt from "bcrypt";
 import { Session } from "../models/sessionModel.js";
 import { OTP } from "../models/Otpmodel.js";
+import { rm } from "fs/promises";
+import { getFolderContentsRecursive } from "../utils/getFolderContentsRecursive.js";
+import { STORAGE_PATH } from "../utils/paths.js";
 
 export async function registerUser(req, res) {
   const { name, email, password } = req.body;
@@ -207,7 +211,7 @@ export async function logoutByAdmin(req, res) {
   try {
     if (req.user.role === "User") {
       return res
-        .staus(403)
+        .status(403)
         .json({ message: "You are not authorized to logout users" });
     }
     const { userId } = req.body;
@@ -216,7 +220,85 @@ export async function logoutByAdmin(req, res) {
   } catch (err) {
     console.log(err);
     return res
-      .staus(500)
+      .status(500)
       .json({ message: "Error while logging out user through admin auth" });
+  }
+}
+
+export async function deleteByAdmin(req, res) {
+  try {
+    if (req.user.role !== "Admin") {
+      return res
+        .status(403)
+        .json({ message: "You are not authorized to delete users" });
+    }
+
+    const { userId } = req.body;
+    if (!userId) {
+      return res
+        .status(400)
+        .json({ message: "userId is required in request body" });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await Session.deleteMany({ userId });
+
+    if (user.rootFolderId) {
+      const folder = await Folder.findById(user.rootFolderId);
+
+      if (folder) {
+        const folderObjectId = folder._id;
+
+        const targetFolder = await Folder.findById(folderObjectId)
+          .lean()
+          .select("userId");
+
+        if (!targetFolder)
+          return res.status(404).json({ message: "Folder doesnt exist" });
+
+        if (!targetFolder.userId.equals(userId)) {
+          return res
+            .status(403)
+            .json({ message: "You are not authorized to delete this folder" });
+        }
+
+        const { folderIds, fileIds } = await getFolderContentsRecursive(
+          folderObjectId,
+          userId,
+        );
+
+        for (const file of fileIds) {
+          try {
+            const filePath = `${STORAGE_PATH}/${file._id}${file.fileExtension}`;
+            await rm(filePath, { force: true, recursive: true });
+          } catch (err) {
+            console.warn(err);
+            return res.status(500).json({
+              message:
+                "Error occured while deleting files from folder deletion",
+            });
+          }
+        }
+
+        const extractedFileIds = fileIds.map((file) => file._id);
+        await Promise.all([
+          File.deleteMany({ _id: { $in: extractedFileIds } }),
+          Folder.deleteMany({ _id: { $in: folderIds } }),
+        ]);
+      }
+    }
+
+    await user.deleteOne();
+
+    return res.status(200).json({ message: "Deleted user successfully" });
+  } catch (err) {
+    console.log(err);
+    return res
+      .status(500)
+      .json({ message: "Error while deleting user through admin auth" });
   }
 }
