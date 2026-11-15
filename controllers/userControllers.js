@@ -162,41 +162,34 @@ export async function logoutUsers(req, res) {
 }
 
 export function userBasicInfo(req, res) {
-  return res.status(200).json({ name: req.user.name, email: req.user.email });
+  return res
+    .status(200)
+    .json({ name: req.user.name, email: req.user.email, role: req.user.role });
 }
 
 export async function allUsersInfo(req, res) {
   try {
     if (req.user.role !== "User") {
       const currentUserId = req.user._id;
-      const allUsers = await User.find({ _id: { $ne: currentUserId } })
+      const allUsers = await User.find({
+        _id: { $ne: currentUserId },
+        role: { $ne: "Admin" },
+      })
         .lean()
         .select("name email _id");
       const allSessions = await Session.find().lean().select("userId");
       const allSessionsSet = new Set(
         allSessions.map(({ userId }) => userId.toString()),
       );
-      const transformedUsersForAdmin = allUsers.map(({ _id, name, email }) => ({
+
+      const transformedUsers = allUsers.map(({ _id, name, email }) => ({
         id: _id.toString(),
         name,
         email,
         isLoggedIn: allSessionsSet.has(_id.toString()),
       }));
 
-      const transformedUsersForManager = allUsers.map(
-        ({ _id, name, email }) => ({
-          id: _id.toString(),
-          name,
-          email,
-        }),
-      );
-
-      const finalUsersDataAuth =
-        req.user.role === "Admin"
-          ? transformedUsersForAdmin
-          : transformedUsersForManager;
-
-      return res.status(200).json(finalUsersDataAuth);
+      return res.status(200).json(transformedUsers);
     }
 
     return res
@@ -205,14 +198,14 @@ export async function allUsersInfo(req, res) {
   } catch (err) {
     console.log(err);
     return res
-      .staus(500)
+      .status(500)
       .json({ message: "Error while fetching all users data" });
   }
 }
 
 export async function logoutByAdmin(req, res) {
   try {
-    if (req.user.role !== "Admin") {
+    if (req.user.role === "User") {
       return res
         .staus(403)
         .json({ message: "You are not authorized to logout users" });
