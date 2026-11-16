@@ -43,7 +43,9 @@ export async function verifyOtp(req, res) {
 export async function loginWithGoogle(req, res) {
   const { idToken } = req.body;
   const { name, email } = await verifyGoogleClient(idToken);
-  const user = await User.findOne({ email }).select("-__v");
+  const user = await User.findOne({ email, isDeleted: { $ne: true } }).select(
+    "-__v",
+  );
 
   if (user) {
     const sessions = await Session.find({ userId: user._id }).sort({

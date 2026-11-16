@@ -89,8 +89,7 @@ export async function registerUser(req, res) {
 export async function loginUser(req, res) {
   const { email, password } = req.body;
   try {
-    const user = await User.findOne({ email });
-
+    const user = await User.findOne({ email, isDeleted: { $ne: true } });
     if (!user) {
       return res.status(401).json({ message: "Invalid Credentials" });
     }
@@ -178,6 +177,7 @@ export async function allUsersInfo(req, res) {
       const allUsers = await User.find({
         _id: { $ne: currentUserId },
         role: { $ne: "Admin" },
+        isDeleted: false,
       })
         .lean()
         .select("name email _id");
@@ -240,6 +240,13 @@ export async function deleteByAdmin(req, res) {
         .json({ message: "userId is required in request body" });
     }
 
+    const currentAdminId = req.user._id?.toString() || req.user.id;
+    if (userId === currentAdminId) {
+      return res.status(400).json({
+        message: "Action denied: You cannot delete your own account.",
+      });
+    }
+
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -300,5 +307,44 @@ export async function deleteByAdmin(req, res) {
     return res
       .status(500)
       .json({ message: "Error while deleting user through admin auth" });
+  }
+}
+
+export async function softDeleteByAdmin(req, res) {
+  try {
+    if (req.user.role !== "Admin") {
+      return res
+        .status(403)
+        .json({ message: "You are not authorized to soft delete users" });
+    }
+
+    const { userId } = req.body;
+    if (!userId) {
+      return res
+        .status(400)
+        .json({ message: "userId is required in request body" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      {
+        isDeleted: true,
+        deletedAt: new Date(),
+      },
+      { new: true },
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    await Session.deleteMany({ userId });
+
+    return res.status(200).json({ message: "User soft deleted successfully" });
+  } catch (err) {
+    console.log(err);
+    return res
+      .status(500)
+      .json({ message: "Error while soft deleting user through admin auth" });
   }
 }

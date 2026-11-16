@@ -28,8 +28,19 @@ export async function checkAuth(req, res, next) {
       _id: new Types.ObjectId(session.userId),
     }).lean();
 
-    if (!loggedInUser) {
-      return res.status(401).json({ message: "Not an valid user" });
+    if (!loggedInUser || loggedInUser.isDeleted === true) {
+      await Session.findByIdAndDelete(sid);
+
+      res.clearCookie("sid", {
+        httpOnly: true,
+        sameSite: "lax",
+        signed: true,
+      });
+
+      return res.status(401).json({
+        message:
+          "Not an valid user OR your account is not avaliable, Contact administrator",
+      });
     }
 
     req.user = loggedInUser;

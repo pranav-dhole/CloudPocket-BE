@@ -3,6 +3,7 @@ import { checkAuth } from "../middlewares/authMiddleware.js";
 import {
   allUsersInfo,
   deleteByAdmin,
+  softDeleteByAdmin,
   loginUser,
   logoutByAdmin,
   logoutUser,
@@ -34,7 +35,10 @@ router.get("/users", checkAuth, allUsersInfo);
 // handling logout of an user from admin & manager roles request for RBAC purposes
 router.post("/logoutByAdmin", checkAuth, logoutByAdmin);
 
-// handling deletion of an user from only admin role request for RBAC purposes
-router.post("/deleteByAdmin", checkAuth, deleteByAdmin);
+// handling permanent deletion of an user from only admin role request for RBAC purposes
+router.delete("/deleteByAdmin", checkAuth, deleteByAdmin);
+
+// handling soft deletion of an user from only admin role request for RBAC purposes
+router.delete("/softDeleteByAdmin", checkAuth, softDeleteByAdmin);
 
 export default router;
