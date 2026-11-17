@@ -11,6 +11,7 @@ import {
   registerUser,
   userBasicInfo,
   recoverSoftDeletedUser,
+  changeUserRoles,
 } from "../controllers/userControllers.js";
 
 const router = express.Router();
@@ -44,5 +45,8 @@ router.delete("/softDeleteByAdmin", checkAuth, softDeleteByAdmin);
 
 // handling recovery of an user from only owner role request for RBAC purposes
 router.post("/recoverUser", checkAuth, recoverSoftDeletedUser);
+
+// handling change of roles of an user from request for RBAC purposes
+router.patch("/changeRole", checkAuth, changeUserRoles);
 
 export default router;

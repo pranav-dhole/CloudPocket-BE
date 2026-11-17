@@ -400,3 +400,56 @@ export async function recoverSoftDeletedUser(req, res) {
       .json({ message: "Error while recovering user through owner auth" });
   }
 }
+
+export async function changeUserRoles(req, res) {
+  try {
+    const ROLE_HIERARCHY = {
+      User: 1,
+      Manager: 2,
+      Admin: 3,
+      Owner: 4,
+    };
+
+    const currentUserRole = req.user.role;
+    const { userId, newRole } = req.body;
+    const targetUser = await User.findById(userId);
+
+    if (
+      ROLE_HIERARCHY[currentUserRole] <= 1 ||
+      !ROLE_HIERARCHY[currentUserRole]
+    ) {
+      return res.status(403).json({
+        message: "Access denied. Insufficient permissions.",
+      });
+    }
+
+    if (!ROLE_HIERARCHY[newRole]) {
+      return res.status(400).json({ error: "Invalid role specified." });
+    }
+
+    if (ROLE_HIERARCHY[newRole] > ROLE_HIERARCHY[currentUserRole]) {
+      return res
+        .status(403)
+        .json({ error: "You cannot assign a role higher than your own." });
+    }
+
+    if (!targetUser) {
+      return res.status(404).json({ error: "Target user not found." });
+    }
+
+    if (ROLE_HIERARCHY[targetUser.role] >= ROLE_HIERARCHY[currentUserRole]) {
+      return res.status(403).json({
+        error:
+          "You cannot modify the role of a user with equal or higher rank.",
+      });
+    }
+
+    targetUser.role = newRole;
+    await targetUser.save();
+
+    return res.status(200).json({ message: "User role changed successfully" });
+  } catch (err) {
+    console.log(err);
+    return res.status(500).json({ message: "Error while changing user roles" });
+  }
+}
