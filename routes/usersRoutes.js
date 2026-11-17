@@ -10,6 +10,7 @@ import {
   logoutUsers,
   registerUser,
   userBasicInfo,
+  recoverSoftDeletedUser,
 } from "../controllers/userControllers.js";
 
 const router = express.Router();
@@ -40,5 +41,8 @@ router.delete("/deleteByAdmin", checkAuth, deleteByAdmin);
 
 // handling soft deletion of an user from only admin role request for RBAC purposes
 router.delete("/softDeleteByAdmin", checkAuth, softDeleteByAdmin);
+
+// handling recovery of an user from only owner role request for RBAC purposes
+router.post("/recoverUser", checkAuth, recoverSoftDeletedUser);
 
 export default router;

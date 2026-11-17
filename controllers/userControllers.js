@@ -174,24 +174,39 @@ export async function allUsersInfo(req, res) {
   try {
     if (req.user.role !== "User") {
       const currentUserId = req.user._id;
-      const allUsers = await User.find({
-        _id: { $ne: currentUserId },
-        role: { $ne: "Admin" },
-        isDeleted: false,
-      })
-        .lean()
-        .select("name email _id");
+      let allUsers = undefined;
+      if (req.user.role === "Owner") {
+        allUsers = await User.find({
+          _id: { $ne: currentUserId },
+          role: { $ne: "Owner" },
+        })
+          .lean()
+          .select("name email _id isDeleted role");
+      } else {
+        allUsers = await User.find({
+          _id: { $ne: currentUserId },
+          role: { $nin: ["Admin", "Owner"] },
+          isDeleted: false,
+        })
+          .lean()
+          .select("name email _id isDeleted role");
+      }
+
       const allSessions = await Session.find().lean().select("userId");
       const allSessionsSet = new Set(
         allSessions.map(({ userId }) => userId.toString()),
       );
 
-      const transformedUsers = allUsers.map(({ _id, name, email }) => ({
-        id: _id.toString(),
-        name,
-        email,
-        isLoggedIn: allSessionsSet.has(_id.toString()),
-      }));
+      const transformedUsers = allUsers.map(
+        ({ _id, name, email, isDeleted, role }) => ({
+          id: _id.toString(),
+          name,
+          email,
+          isLoggedIn: allSessionsSet.has(_id.toString()),
+          isDeleted,
+          role,
+        }),
+      );
 
       return res.status(200).json(transformedUsers);
     }
@@ -312,7 +327,7 @@ export async function deleteByAdmin(req, res) {
 
 export async function softDeleteByAdmin(req, res) {
   try {
-    if (req.user.role !== "Admin") {
+    if (req.user.role !== "Admin" && req.user.role !== "Owner") {
       return res
         .status(403)
         .json({ message: "You are not authorized to soft delete users" });
@@ -346,5 +361,42 @@ export async function softDeleteByAdmin(req, res) {
     return res
       .status(500)
       .json({ message: "Error while soft deleting user through admin auth" });
+  }
+}
+
+export async function recoverSoftDeletedUser(req, res) {
+  try {
+    if (req.user.role !== "Owner") {
+      return res
+        .status(403)
+        .json({ message: "You are not authorized to recover users" });
+    }
+
+    const { userId } = req.body;
+    if (!userId) {
+      return res
+        .status(400)
+        .json({ message: "userId is required in request body" });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      {
+        isDeleted: false,
+        deletedAt: null,
+      },
+      { new: true },
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    return res.status(200).json({ message: "User recovered successfully" });
+  } catch (err) {
+    console.log(err);
+    return res
+      .status(500)
+      .json({ message: "Error while recovering user through owner auth" });
   }
 }
