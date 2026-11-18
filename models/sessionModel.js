@@ -10,6 +10,11 @@ const sessionSchema = new Schema({
     default: Date.now,
     expires: 60 * 60,
   },
+  purpose: {
+    type: String,
+    enum: ["normal", "password_setup"],
+    default: "normal",
+  },
 });
 
 export const Session = mongoose.model("Session", sessionSchema);

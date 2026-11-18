@@ -35,6 +35,10 @@ const userSchema = new Schema(
       type: Date,
       default: null,
     },
+    isPasswordSet: {
+      type: Boolean,
+      select: false,
+    },
   },
   {
     strict: "throw",

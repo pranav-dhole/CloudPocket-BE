@@ -44,29 +44,56 @@ export async function loginWithGoogle(req, res) {
   const { idToken } = req.body;
   const { name, email } = await verifyGoogleClient(idToken);
   const user = await User.findOne({ email, isDeleted: { $ne: true } }).select(
-    "-__v",
+    "-__v +isPasswordSet",
   );
 
   if (user) {
-    const sessions = await Session.find({ userId: user._id }).sort({
-      createdAt: 1,
-    });
+    if (user.isPasswordSet && user.password) {
+      const sessions = await Session.find({ userId: user._id }).sort({
+        createdAt: 1,
+      });
 
-    if (sessions.length >= 2) {
-      const excessCount = sessions.length - 2 + 1;
-      const sessionsToDelete = sessions.slice(0, excessCount);
-      const idsToDelete = sessionsToDelete.map((s) => s._id);
-      await Session.deleteMany({ _id: { $in: idsToDelete } });
+      if (sessions.length >= 2) {
+        const excessCount = sessions.length - 2 + 1;
+        const sessionsToDelete = sessions.slice(0, excessCount);
+        const idsToDelete = sessionsToDelete.map((s) => s._id);
+        await Session.deleteMany({ _id: { $in: idsToDelete } });
+      }
+
+      const session = await Session.create({
+        userId: user._id,
+        purpose: "normal",
+      });
+
+      res.cookie("sid", session._id, {
+        httpOnly: true,
+        sameSite: "lax",
+        signed: true,
+        maxAge: 60 * 60 * 1000,
+      });
+
+      return res.status(200).json({
+        message: "Logged in successfully",
+        requiresPasswordSetup: false,
+      });
     }
 
-    const session = await Session.create({ userId: user._id });
+    const session = await Session.create({
+      userId: user._id,
+      purpose: "password_setup",
+    });
+
     res.cookie("sid", session._id, {
       httpOnly: true,
       sameSite: "lax",
       signed: true,
       maxAge: 60 * 60 * 1000,
     });
-    return res.status(200).json({ message: "Logged in successfully" });
+
+    return res.status(200).json({
+      message: "Please set your account password",
+      requiresPasswordSetup: true,
+    });
   }
 
   const session = await mongoose.startSession();
@@ -95,12 +122,16 @@ export async function loginWithGoogle(req, res) {
           name,
           email,
           rootFolderId,
+          isPasswordSet: false,
         },
       ],
       { session },
     );
 
-    const newSession = await Session.create({ userId: newUserId });
+    const newSession = await Session.create({
+      userId: newUserId,
+      purpose: "password_setup",
+    });
     res.cookie("sid", newSession._id, {
       httpOnly: true,
       sameSite: "lax",
@@ -109,7 +140,10 @@ export async function loginWithGoogle(req, res) {
     });
 
     await session.commitTransaction();
-    return res.status(201).json({ message: "Logged in successfully" });
+    return res.status(201).json({
+      message: "Google verification successful. Please set your password.",
+      requiresPasswordSetup: true,
+    });
   } catch (err) {
     await session.abortTransaction();
 
@@ -131,5 +165,46 @@ export async function loginWithGoogle(req, res) {
     });
   } finally {
     await session.endSession();
+  }
+}
+
+export async function setPassword(req, res) {
+  try {
+    const userId = req.user?._id || req.userId;
+    const { password } = req.body;
+
+    if (!password || password.trim().length < 4) {
+      return res
+        .status(400)
+        .json({ message: "Password must be at least 4 characters long." });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    if (user.isPasswordSet && user.password) {
+      return res
+        .status(400)
+        .json({ message: "Password is already set for this account." });
+    }
+
+    user.password = password;
+    user.isPasswordSet = true;
+
+    await user.save();
+
+    await Session.findByIdAndUpdate(req.authSession._id, { purpose: "normal" });
+
+    return res.status(200).json({
+      message:
+        "Password set successfully! You can now log in with your email and password.",
+    });
+  } catch (err) {
+    console.error("Error setting password:", err);
+    return res
+      .status(500)
+      .json({ message: "Internal server error while setting password." });
   }
 }

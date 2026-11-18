@@ -15,13 +15,13 @@ export async function checkAuth(req, res, next) {
     }
 
     const session = await Session.findById(sid);
-    if (!session) {
+    if (!session || session.purpose === "password_setup") {
       res.clearCookie("sid", {
         httpOnly: true,
         signed: true,
         sameSite: "lax",
       });
-      return res.status(401).json({ message: "Not an valid user" });
+      return res.status(401).json({ message: "Authentication required" });
     }
 
     const loggedInUser = await User.findOne({
