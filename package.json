@@ -12,6 +12,7 @@
     "google-auth-library": "^11.3.3",
     "mime-types": "^2.1.35",
     "mongoose": "^9.11.0",
-    "nodemailer": "^10.1.7"
+    "nodemailer": "^10.1.7",
+    "redis": "^6.3.1"
   }
 }
