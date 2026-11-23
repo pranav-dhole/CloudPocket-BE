@@ -11,7 +11,9 @@ export async function checkPasswordSetup(req, res, next) {
       });
     }
 
-    const session = await Session.findById(sid);
+    // const session = await Session.findById(sid);
+    const redisKey = `session:${sid}`;
+    const session = await redisClient.json.get(redisKey);
 
     if (!session || session.purpose !== "password_setup") {
       return res.status(403).json({
@@ -22,7 +24,8 @@ export async function checkPasswordSetup(req, res, next) {
     const user = await User.findById(session.userId);
 
     if (!user || user.isDeleted === true) {
-      await Session.findByIdAndDelete(sid);
+      // await Session.findByIdAndDelete(sid);
+      await redisClient.json.del(`session:${sid}`);
 
       res.clearCookie("sid", {
         httpOnly: true,
@@ -43,6 +46,7 @@ export async function checkPasswordSetup(req, res, next) {
 
     req.user = user;
     req.authSession = session;
+    req.sessionKey = redisKey;
 
     next();
   } catch (err) {

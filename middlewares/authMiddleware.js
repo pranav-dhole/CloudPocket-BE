@@ -1,6 +1,7 @@
 import { Session } from "../models/sessionModel.js";
 import { User } from "../models/userModel.js";
 import { Types } from "mongoose";
+import { redisClient } from "../utils/redisclient.js";
 
 export async function checkAuth(req, res, next) {
   try {
@@ -14,7 +15,9 @@ export async function checkAuth(req, res, next) {
       return res.status(401).json({ message: "Not an valid user" });
     }
 
-    const session = await Session.findById(sid);
+    // const session = await Session.findById(sid);
+    const redisKey = `session:${sid}`;
+    const session = await redisClient.json.get(redisKey);
     if (!session || session.purpose === "password_setup") {
       res.clearCookie("sid", {
         httpOnly: true,
@@ -29,7 +32,8 @@ export async function checkAuth(req, res, next) {
     }).lean();
 
     if (!loggedInUser || loggedInUser.isDeleted === true) {
-      await Session.findByIdAndDelete(sid);
+      // await Session.findByIdAndDelete(sid);
+      await redisClient.json.del(`session:${sid}`);
 
       res.clearCookie("sid", {
         httpOnly: true,

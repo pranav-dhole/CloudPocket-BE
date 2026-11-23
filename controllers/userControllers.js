@@ -8,6 +8,7 @@ import { OTP } from "../models/Otpmodel.js";
 import { rm } from "fs/promises";
 import { getFolderContentsRecursive } from "../utils/getFolderContentsRecursive.js";
 import { STORAGE_PATH } from "../utils/paths.js";
+import { redisClient } from "../utils/redisClient.js";
 
 export async function registerUser(req, res) {
   const { name, email, password } = req.body;
@@ -99,18 +100,27 @@ export async function loginUser(req, res) {
       return res.status(401).json({ message: "Invalid Credentials" });
     }
 
-    const sessions = await Session.find({ userId: user._id }).sort({
-      createdAt: 1,
-    });
-    if (sessions.length >= 2) {
-      const excessCount = sessions.length - 2 + 1;
-      const sessionsToDelete = sessions.slice(0, excessCount);
-      const idsToDelete = sessionsToDelete.map((s) => s._id);
-      await Session.deleteMany({ _id: { $in: idsToDelete } });
-    }
+    // const sessions = await Session.find({ userId: user._id }).sort({
+    //   createdAt: 1,
+    // });
+    // if (sessions.length >= 2) {
+    //   const excessCount = sessions.length - 2 + 1;
+    //   const sessionsToDelete = sessions.slice(0, excessCount);
+    //   const idsToDelete = sessionsToDelete.map((s) => s._id);
+    //   await Session.deleteMany({ _id: { $in: idsToDelete } });
+    // }
 
-    const session = await Session.create({ userId: user._id });
-    res.cookie("sid", session._id, {
+    // const session = await Session.create({ userId: user._id });
+    const sessionRandomId = crypto.randomUUID();
+    const redisKey = `session:${sessionRandomId}`;
+    await redisClient.json.set(redisKey, "$", {
+      userId: user._id,
+      purpose: "normal",
+    });
+
+    await redisClient.expire(redisKey, 60 * 60);
+
+    res.cookie("sid", sessionRandomId, {
       httpOnly: true,
       sameSite: "lax",
       signed: true,
@@ -129,7 +139,8 @@ export async function loginUser(req, res) {
 export async function logoutUser(req, res) {
   const { sid } = req.signedCookies;
   if (sid) {
-    await Session.findByIdAndDelete(sid);
+    // await Session.findByIdAndDelete(sid);
+    await redisClient.json.del(`session:${sid}`);
   }
 
   res.clearCookie("sid", {

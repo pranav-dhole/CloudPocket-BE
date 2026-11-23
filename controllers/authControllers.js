@@ -5,6 +5,7 @@ import { sendOtpService } from "../services/sendOtpService.js";
 import { verifyGoogleClient } from "../utils/verifyGoogleClient.js";
 import { Folder } from "../models/folderModel.js";
 import { Session } from "../models/sessionModel.js";
+import { redisClient } from "../utils/redisClient.js";
 
 export async function sendOtp(req, res) {
   try {
@@ -49,23 +50,32 @@ export async function loginWithGoogle(req, res) {
 
   if (user) {
     if (user.isPasswordSet && user.password) {
-      const sessions = await Session.find({ userId: user._id }).sort({
-        createdAt: 1,
-      });
+      // const sessions = await Session.find({ userId: user._id }).sort({
+      //   createdAt: 1,
+      // });
 
-      if (sessions.length >= 2) {
-        const excessCount = sessions.length - 2 + 1;
-        const sessionsToDelete = sessions.slice(0, excessCount);
-        const idsToDelete = sessionsToDelete.map((s) => s._id);
-        await Session.deleteMany({ _id: { $in: idsToDelete } });
-      }
+      // if (sessions.length >= 2) {
+      //   const excessCount = sessions.length - 2 + 1;
+      //   const sessionsToDelete = sessions.slice(0, excessCount);
+      //   const idsToDelete = sessionsToDelete.map((s) => s._id);
+      //   await Session.deleteMany({ _id: { $in: idsToDelete } });
+      // }
 
-      const session = await Session.create({
+      // const session = await Session.create({
+      //   userId: user._id,
+      //   purpose: "normal",
+      // });
+
+      const sessionRandomId = crypto.randomUUID();
+      const redisKey = `session:${sessionRandomId}`;
+      await redisClient.json.set(redisKey, "$", {
         userId: user._id,
         purpose: "normal",
       });
 
-      res.cookie("sid", session._id, {
+      await redisClient.expire(redisKey, 60 * 60);
+
+      res.cookie("sid", sessionRandomId, {
         httpOnly: true,
         sameSite: "lax",
         signed: true,
@@ -78,12 +88,21 @@ export async function loginWithGoogle(req, res) {
       });
     }
 
-    const session = await Session.create({
+    // const session = await Session.create({
+    //   userId: user._id,
+    //   purpose: "password_setup",
+    // });
+
+    const sessionRandomId = crypto.randomUUID();
+    const redisKey = `session:${sessionRandomId}`;
+    await redisClient.json.set(redisKey, "$", {
       userId: user._id,
       purpose: "password_setup",
     });
 
-    res.cookie("sid", session._id, {
+    await redisClient.expire(redisKey, 60 * 60);
+
+    res.cookie("sid", sessionRandomId, {
       httpOnly: true,
       sameSite: "lax",
       signed: true,
@@ -128,11 +147,19 @@ export async function loginWithGoogle(req, res) {
       { session },
     );
 
-    const newSession = await Session.create({
-      userId: newUserId,
+    // const newSession = await Session.create({
+    //   userId: newUserId,
+    //   purpose: "password_setup",
+    // });
+
+    const newSessionRandomId = crypto.randomUUID();
+    const redisKey = `session:${newSessionRandomId}`;
+    await redisClient.json.set(redisKey, "$", {
+      userId: user._id,
       purpose: "password_setup",
     });
-    res.cookie("sid", newSession._id, {
+
+    res.cookie("sid", newSessionRandomId, {
       httpOnly: true,
       sameSite: "lax",
       signed: true,
@@ -195,7 +222,9 @@ export async function setPassword(req, res) {
 
     await user.save();
 
-    await Session.findByIdAndUpdate(req.authSession._id, { purpose: "normal" });
+    // await Session.findByIdAndUpdate(req.authSession._id, { purpose: "normal" });
+    const sessionKey = req.sessionKey || `${req.signedCookies?.sid}`;
+    await redisClient.json.set(sessionKey, "$.purpose", "normal");
 
     return res.status(200).json({
       message:
