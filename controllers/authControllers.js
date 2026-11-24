@@ -61,6 +61,16 @@ export async function loginWithGoogle(req, res) {
       //   await Session.deleteMany({ _id: { $in: idsToDelete } });
       // }
 
+      const sessions = await redisClient.ft.search(
+        "userIdIdx",
+        `@userId:{${user._id}}`,
+      );
+
+      if (sessions.total >= 2) {
+        await redisClient.json.del(sessions.documents[0].id);
+      }
+      console.log(sessions.documents[0]);
+
       // const session = await Session.create({
       //   userId: user._id,
       //   purpose: "normal",
@@ -71,6 +81,7 @@ export async function loginWithGoogle(req, res) {
       await redisClient.json.set(redisKey, "$", {
         userId: user._id,
         purpose: "normal",
+        createdAt: Date.now(),
       });
 
       await redisClient.expire(redisKey, 60 * 60);
@@ -98,6 +109,7 @@ export async function loginWithGoogle(req, res) {
     await redisClient.json.set(redisKey, "$", {
       userId: user._id,
       purpose: "password_setup",
+      createdAt: Date.now(),
     });
 
     await redisClient.expire(redisKey, 60 * 60);
@@ -157,6 +169,7 @@ export async function loginWithGoogle(req, res) {
     await redisClient.json.set(redisKey, "$", {
       userId: user._id,
       purpose: "password_setup",
+      createdAt: Date.now(),
     });
 
     res.cookie("sid", newSessionRandomId, {

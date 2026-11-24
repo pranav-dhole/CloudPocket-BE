@@ -109,6 +109,27 @@ export async function loginUser(req, res) {
     //   const idsToDelete = sessionsToDelete.map((s) => s._id);
     //   await Session.deleteMany({ _id: { $in: idsToDelete } });
     // }
+    const sessions = await redisClient.ft.search(
+      "userIdIdx",
+      `@userId:{${user._id}}`,
+      {
+        RETURN: [],
+        SORTBY: {
+          BY: "createdAt",
+          DIRECTION: "ASC",
+        },
+        LIMIT: {
+          from: 0,
+          size: 1,
+        },
+      },
+    );
+
+    if (sessions.total >= 2) {
+      await redisClient.json.del(sessions.documents[0].id);
+    }
+
+    console.log(sessions);
 
     // const session = await Session.create({ userId: user._id });
     const sessionRandomId = crypto.randomUUID();
@@ -116,6 +137,7 @@ export async function loginUser(req, res) {
     await redisClient.json.set(redisKey, "$", {
       userId: user._id,
       purpose: "normal",
+      createdAt: Date.now(),
     });
 
     await redisClient.expire(redisKey, 60 * 60);
